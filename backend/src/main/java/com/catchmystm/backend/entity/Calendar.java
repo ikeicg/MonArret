@@ -2,6 +2,7 @@ package com.catchmystm.backend.entity;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -57,8 +58,11 @@ public class Calendar {
     private Instant createdAt;
 
     @OneToMany(mappedBy = "calendar", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<CalendarDate> calendarDates;
+    private List<CalendarDate> calendarDates;
+    
+    @OneToMany(mappedBy = "calendar", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<ServiceDates> serviceDates;
 
     @OneToMany(mappedBy = "calendar", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private java.util.List<Trip> trips;
+    private List<Trip> trips;
 }

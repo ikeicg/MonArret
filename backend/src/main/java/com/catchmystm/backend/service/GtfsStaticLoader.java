@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -159,6 +160,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
                     default:
                         log.debug("Skipping unknown file: {}", fileName);
                 }
+                
             }
         }
         
@@ -166,8 +168,6 @@ public class GtfsStaticLoader implements CommandLineRunner {
     }
     
     // Parser methods
-    
-    // Parsers
     
     private List<Agency> parseAgency(ZipInputStream zis) throws IOException {
         List<Agency> agencies = new ArrayList<>();
@@ -561,8 +561,6 @@ public class GtfsStaticLoader implements CommandLineRunner {
     
     // Persistence
     
-    // Persistence Layer
-    
     private void truncateStagingSchema() {
         log.info("Truncating gtfs_staging schema...");
         
@@ -579,7 +577,8 @@ public class GtfsStaticLoader implements CommandLineRunner {
             "gtfs_staging.calendar",
             "gtfs_staging.stops",
             "gtfs_staging.agency",
-            "gtfs_staging.feed_info"
+            "gtfs_staging.feed_info",
+            "gtfs_staging.service_dates"
         };
         
         for (String table : tables) {
@@ -656,6 +655,50 @@ public class GtfsStaticLoader implements CommandLineRunner {
             ps.setObject(11, Timestamp.from(calendar.getCreatedAt()));
         });
         log.info("Persisted {} calendars", calendars.size());
+        
+        
+        // Normalize services
+
+        sql = """
+            INSERT INTO gtfs_staging.service_dates
+            (service_id, valid_date)
+            VALUES (?, ?)
+            ON CONFLICT (service_id, valid_date) DO NOTHING
+            """;
+
+        List<Object[]> rows = new ArrayList<>();
+
+        for (Calendar calendar : calendars) {
+
+            LocalDate startDate = calendar.getStartDate();
+            LocalDate endDate = calendar.getEndDate();
+            String serviceId = calendar.getServiceId();
+
+            Iterable<LocalDate> dates =
+                    startDate.datesUntil(endDate.plusDays(1))::iterator;
+
+            for (LocalDate date : dates) {
+
+                boolean valid = switch (date.getDayOfWeek()) {
+                    case MONDAY -> calendar.getMonday() == 1;
+                    case TUESDAY -> calendar.getTuesday() == 1;
+                    case WEDNESDAY -> calendar.getWednesday() == 1;
+                    case THURSDAY -> calendar.getThursday() == 1;
+                    case FRIDAY -> calendar.getFriday() == 1;
+                    case SATURDAY -> calendar.getSaturday() == 1;
+                    case SUNDAY -> calendar.getSunday() == 1;
+                };
+
+                if (valid) {
+                    rows.add(new Object[] {
+                        serviceId,
+                        date
+                    });
+                }
+            }
+        }
+
+        jdbcTemplate.batchUpdate(sql, rows);
     }
     
     private void persistCalendarDates(List<CalendarDate> calendarDates) {
@@ -667,6 +710,43 @@ public class GtfsStaticLoader implements CommandLineRunner {
             ps.setObject(4, Timestamp.from(cd.getCreatedAt()));
         });
         log.info("Persisted {} calendar dates", calendarDates.size());
+        
+        // Normalize exceptions
+
+        String insertSql = """
+            INSERT INTO gtfs_staging.service_dates
+            (service_id, valid_date)
+            VALUES (?, ?)
+            ON CONFLICT (service_id, valid_date) DO NOTHING
+            """;
+
+        String deleteSql = """
+            DELETE FROM gtfs_staging.service_dates
+            WHERE service_id = ?
+            AND valid_date = ?
+            """;
+
+        List<Object[]> inserts = new ArrayList<>();
+        List<Object[]> deletes = new ArrayList<>();
+
+        for (CalendarDate calendarDate : calendarDates) {
+
+            Object[] row = new Object[] {
+                calendarDate.getId().getServiceId(),
+                calendarDate.getId().getExceptionDate()
+            };
+
+            if (calendarDate.getExceptionType() == 1) {
+                inserts.add(row);
+            } else if (calendarDate.getExceptionType() == 2) {
+                deletes.add(row);
+            }
+        }
+
+        jdbcTemplate.batchUpdate(insertSql, inserts);
+
+        jdbcTemplate.batchUpdate(deleteSql, deletes);
+        
     }
     
     private void persistStops(List<Stop> stops) {
@@ -808,13 +888,14 @@ public class GtfsStaticLoader implements CommandLineRunner {
         log.info("Validating table row counts...");
         
         String[] checks = {
-            "SELECT COUNT(*) FROM gtfs_staging.agency",
-            "SELECT COUNT(*) FROM gtfs_staging.calendar",
-            "SELECT COUNT(*) FROM gtfs_staging.stops",
-            "SELECT COUNT(*) FROM gtfs_staging.routes",
-            "SELECT COUNT(*) FROM gtfs_staging.trips",
-            "SELECT COUNT(*) FROM gtfs_staging.stop_times"
-        };
+        	    "SELECT COUNT(*) FROM gtfs_staging.agency",
+        	    "SELECT COUNT(*) FROM gtfs_staging.calendar",
+        	    "SELECT COUNT(*) FROM gtfs_staging.stops",
+        	    "SELECT COUNT(*) FROM gtfs_staging.routes",
+        	    "SELECT COUNT(*) FROM gtfs_staging.trips",
+        	    "SELECT COUNT(*) FROM gtfs_staging.stop_times",
+        	    "SELECT COUNT(*) FROM gtfs_staging.service_dates"
+        	};
         
         for (String query : checks) {
             Integer count = jdbcTemplate.queryForObject(query, Integer.class);
@@ -913,8 +994,6 @@ public class GtfsStaticLoader implements CommandLineRunner {
             feedInfo.getFeedVersion(), 
             feedInfo.getFeedEndDate().plusDays(1));
     }
-    
-    // Helper methods
     
     // Helper methods
     

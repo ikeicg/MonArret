@@ -147,3 +147,13 @@ CREATE TABLE gtfs_staging.feed_info (
   feed_version VARCHAR(50),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE gtfs_staging.service_dates (
+	service_id VARCHAR(100) NOT NULL REFERENCES gtfs_staging.calendar(service_id) ON DELETE CASCADE,
+	valid_date DATE NOT NULL,
+	PRIMARY KEY (service_id, valid_date),
+	created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_staging_service_dates_service_id ON gtfs_staging.service_dates(service_id);
+CREATE INDEX idx_staging_service_dates_valid_date ON gtfs_staging.service_dates(valid_date);
