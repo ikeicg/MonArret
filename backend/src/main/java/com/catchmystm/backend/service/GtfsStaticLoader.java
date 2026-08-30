@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
-import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -21,6 +20,7 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -51,16 +51,21 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class GtfsStaticLoader implements CommandLineRunner {
     
-    @Autowired
     private RestClient restClient;
-    
-    @Autowired
     private JdbcTemplate jdbcTemplate;
-    
-    @Autowired
     private AppConfigRepository appConfigRepository;
     
-    private static final String STM_GTFS_URL = "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip";
+    @Value("${gtfs.stm.override-url:}")
+    private String overrideUrl;
+    
+    public GtfsStaticLoader(RestClient restClient, JdbcTemplate jdbcTemplate, AppConfigRepository appConfigRepository) {
+		super();
+		this.restClient = restClient;
+		this.jdbcTemplate = jdbcTemplate;
+		this.appConfigRepository = appConfigRepository;
+	}
+    
+    private static final String DEFAULT_STM_GTFS_URL = "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip";
     private final GeometryFactory geometryFactory = new GeometryFactory();
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
 
@@ -103,12 +108,18 @@ public class GtfsStaticLoader implements CommandLineRunner {
         }
     }
     
-    private byte[] downloadGtfsZip() {
-        log.info("Downloading GTFS ZIP from STM...");
+	private byte[] downloadGtfsZip() {
+        String targetUrl = (overrideUrl != null && !overrideUrl.trim().isEmpty()) 
+            ? overrideUrl 
+            : DEFAULT_STM_GTFS_URL;
+            
+        log.info("Downloading GTFS ZIP from STM using URL: {}", targetUrl);
+        
         byte[] data = restClient.get()
-            .uri(STM_GTFS_URL)
+            .uri(targetUrl)
             .retrieve()
             .body(byte[].class);
+            
         log.info("Downloaded {} bytes", data.length);
         return data;
     }
@@ -564,7 +575,6 @@ public class GtfsStaticLoader implements CommandLineRunner {
     private void truncateStagingSchema() {
         log.info("Truncating gtfs_staging schema...");
         
-        jdbcTemplate.update("SET CONSTRAINTS ALL DEFERRED");
         
         String[] tables = {
             "gtfs_staging.stop_times",
@@ -590,7 +600,6 @@ public class GtfsStaticLoader implements CommandLineRunner {
             }
         }
         
-        jdbcTemplate.update("SET CONSTRAINTS ALL IMMEDIATE");
         log.info("Staging schema truncation complete");
     }
     
