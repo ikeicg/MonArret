@@ -23,10 +23,10 @@ public class StmPoller {
 
     private final WebClient webClient;
     private final String apiKey;
+    private final Duration transitFeedPollInterval = Duration.ofSeconds(20);
 
-    // Separate sinks for clear domain segregation
-    private final Sinks.Many<FeedMessage> vehiclePositionSink = Sinks.many().multicast().onBackpressureBuffer(2, false);
-    private final Sinks.Many<FeedMessage> tripUpdateSink = Sinks.many().multicast().onBackpressureBuffer(2, false);
+    private final Sinks.Many<FeedMessage> vehiclePositionSink = Sinks.many().multicast().directBestEffort();
+    private final Sinks.Many<FeedMessage> tripUpdateSink = Sinks.many().multicast().directBestEffort();
 
     public StmPoller(
             WebClient.Builder webClientBuilder,
@@ -45,7 +45,7 @@ public class StmPoller {
     @EventListener(ApplicationReadyEvent.class)
     public void startPolling() {
        
-        Flux.interval(Duration.ZERO, Duration.ofSeconds(20))
+        Flux.interval(Duration.ZERO, transitFeedPollInterval)
                 .flatMap(tick -> Mono.zip(
                         fetchGtfsFeed("/vehiclePositions").doOnNext(vehiclePositionSink::tryEmitNext),
                         fetchGtfsFeed("/tripUpdates").doOnNext(tripUpdateSink::tryEmitNext)
@@ -62,7 +62,15 @@ public class StmPoller {
                 .header("apiKey", apiKey)
                 .header(HttpHeaders.ACCEPT, "application/x-protobuf")
                 .retrieve()
-                .bodyToMono(FeedMessage.class) 
+                .bodyToMono(byte[].class)
+                .map(bytes -> {
+                	try {
+                		 return FeedMessage.parseFrom(bytes);
+                	}
+                	catch (Exception e) {
+                		throw new RuntimeException("Invalid GTFS-RT protobuf", e);
+                	}
+                }) 
                 .timeout(Duration.ofSeconds(10))
                 .onErrorResume(ex -> {
                     log.error("Failed to fetch STM GTFS data from {}: {}", endpoint, ex.getMessage());

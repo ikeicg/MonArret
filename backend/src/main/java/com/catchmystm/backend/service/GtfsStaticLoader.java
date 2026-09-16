@@ -83,9 +83,10 @@ public class GtfsStaticLoader implements CommandLineRunner {
 	@Transactional
     public void execute(String... args) {
         log.info("GTFS static data load started");
+        Map<String, List<?>> entities;
         try {
             byte[] zipBytes = downloadGtfsZip();
-            Map<String, List<?>> entities = handleGtfsZip(zipBytes);
+            entities = handleGtfsZip(zipBytes);
             
             truncateStagingSchema();
             persistToStagingWithBatch(entities);
@@ -105,6 +106,9 @@ public class GtfsStaticLoader implements CommandLineRunner {
         } catch (Exception e) {
             log.error("GTFS load failed", e);
             throw new RuntimeException("Failed to load GTFS data", e);
+        }
+        finally {
+        	entities = null;
         }
     }
     
