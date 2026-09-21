@@ -1,8 +1,9 @@
 package com.catchmystm.backend.runtime;
 
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.geom.Point;
@@ -55,9 +56,11 @@ public class ActiveTripStateFactory {
 	}
 	
 	private List<StopTimeContext> generateSchedule(List<StopTime> stopTimes){
-		
-		List<StopTimeContext> schedule = stopTimes.stream().map(this::constructStopTimeContext).toList();
-		
+
+		List<StopTimeContext> schedule = stopTimes.stream()
+				.map(this::constructStopTimeContext)
+				.collect(Collectors.toCollection(ArrayList::new));
+
 		return schedule;
 	}
 	
@@ -89,7 +92,19 @@ public class ActiveTripStateFactory {
 		ProjCoordinate projectedLocation = geoOpsService.transformWgsToUtm(stopLocation.getX(), stopLocation.getY());
 		stopLocation = geoOpsService.convertProjCoordinateToPoint(projectedLocation);
 		
-		return new StopTimeContext(stopId, stopSeq, arrivalTime, arrivalTime, departureTime, departureTime, stopLocation.getX(), stopLocation.getY());
-		
+		return new StopTimeContext(stopId, stopSeq, arrivalTime, arrivalTime, departureTime, departureTime,
+				stopLocation.getX(), stopLocation.getY(), "SCHEDULED");
+
+	}
+
+	
+	public ActiveTripState createBare(String tripId, String routeId, Integer directionId) {
+
+		ActiveTripState activeTrip = new ActiveTripState();
+		activeTrip.setTripId(tripId);
+		activeTrip.setRouteId(routeId);
+		activeTrip.setDirectionId(directionId);
+
+		return activeTrip;
 	}
 }
