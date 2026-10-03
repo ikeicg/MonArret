@@ -1,7 +1,6 @@
 package com.catchmystm.backend.entity;
 
 import java.time.Instant;
-import java.time.LocalTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;

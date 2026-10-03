@@ -2,9 +2,12 @@ package com.catchmystm.backend.runtime;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalTime;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
+import org.locationtech.jts.geom.LineString;
 import org.locationtech.proj4j.ProjCoordinate;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -63,8 +66,7 @@ public class LiveStateEngine {
 
 	}
 
-	// Package-private (not private) so tests in this package can call it directly
-	// without going through the reactive subscription.
+	
 	void handleTripUpdates(FeedMessage feed) {
 
 		if(feed == null) return;
@@ -89,13 +91,19 @@ public class LiveStateEngine {
 		String tripId = trip.getTripId();
 		if (tripId == null || tripId.isBlank()) return;
 
+		LocalDate serviceDate = parseServiceDate(trip);
+		if (serviceDate == null) {
+			log.warn("Skipping trip update for {}: missing or invalid start_date", tripId);
+			return;
+		}
+
 		String scheduleRelationship = trip.getScheduleRelationship().name();
 		boolean scheduled = "SCHEDULED".equals(scheduleRelationship);
 		String routeId = trip.hasRouteId() ? trip.getRouteId() : null;
 		Integer directionId = trip.hasDirectionId() ? trip.getDirectionId() : null;
 		List<TripUpdate.StopTimeUpdate> stopTimeUpdates = tripUpdate.getStopTimeUpdateList();
 
-		tripStateStore.applyTripUpdate(tripId, scheduled, routeId, directionId, state -> {
+		tripStateStore.applyTripUpdate(tripId, serviceDate, scheduled, routeId, directionId, state -> {
 			state.setScheduleRelationship(scheduleRelationship);
 			applyStopTimeUpdates(state, stopTimeUpdates);
 			return state;
@@ -104,9 +112,8 @@ public class LiveStateEngine {
 
 	// stopSchedule is null on a bare (not-yet-SCHEDULED) state — nothing to apply yet.
 	//
-	// Plain nested scan, deliberately not order-dependent: `updates`' ordering is STM's
-	// convention, not a GTFS-RT spec guarantee, so matching can't rely on it. At this project's
-	// scale (a few dozen stops per trip) the O(n*m) cost is negligible.
+	// Plain nested scan, not order-dependent: updates' ordering is STM's
+	// convention, not a guarantee, so matching can't rely on it. O(n*m) cost is negligible.
 	private void applyStopTimeUpdates(ActiveTripState state, List<TripUpdate.StopTimeUpdate> updates) {
 
 		List<StopTimeContext> schedule = state.getStopSchedule();
@@ -124,12 +131,16 @@ public class LiveStateEngine {
 				StopTimeContext current = schedule.get(i);
 				if (current.stopSequence() != stopSequence) continue;
 
-				LocalTime estimatedArrival = update.hasArrival() && update.getArrival().hasTime()
-						? toLocalTime(update.getArrival().getTime())
+				boolean skipped = update.getScheduleRelationship() == TripUpdate.StopTimeUpdate.ScheduleRelationship.SKIPPED;
+
+				Instant estimatedArrival = skipped ? null
+						: update.hasArrival() && update.getArrival().hasTime()
+						? Instant.ofEpochSecond(update.getArrival().getTime())
 						: current.estimatedArrival();
 
-				LocalTime estimatedDeparture = update.hasDeparture() && update.getDeparture().hasTime()
-						? toLocalTime(update.getDeparture().getTime())
+				Instant estimatedDeparture = skipped ? null
+						: update.hasDeparture() && update.getDeparture().hasTime()
+						? Instant.ofEpochSecond(update.getDeparture().getTime())
 						: current.estimatedDeparture();
 
 				schedule.set(i, new StopTimeContext(
@@ -141,6 +152,7 @@ public class LiveStateEngine {
 						estimatedDeparture,
 						current.x(),
 						current.y(),
+						current.distanceAlongRoute(),
 						update.getScheduleRelationship().name()));
 
 				matched++;
@@ -149,17 +161,22 @@ public class LiveStateEngine {
 		}
 
 		if (matched < updates.size()) {
-			log.warn("Trip {}: only matched {}/{} stop_time_update entries against the static schedule",
+			log.debug("Trip {}: only matched {}/{} stop_time_update entries against the static schedule",
 					state.getTripId(), matched, updates.size());
 		}
 	}
 
-	private LocalTime toLocalTime(long epochSeconds) {
-		return LocalTime.ofInstant(Instant.ofEpochSecond(epochSeconds), montrealClock.getZone());
+	// start_date is the trip's service date (YYYYMMDD); null when absent or malformed.
+	private LocalDate parseServiceDate(TripDescriptor trip) {
+		if (!trip.hasStartDate()) return null;
+		try {
+			return LocalDate.parse(trip.getStartDate(), DateTimeFormatter.BASIC_ISO_DATE);
+		} catch (DateTimeParseException e) {
+			return null;
+		}
 	}
 
-	// Package-private (not private) so tests in this package can call it directly
-	// without going through the reactive subscription.
+	
 	void handleVehiclePositions(FeedMessage feed) {
 
 		if(feed == null) return;
@@ -186,21 +203,35 @@ public class LiveStateEngine {
 
 		if (!vehicle.hasPosition()) return;
 
+		if (!vehicle.hasTimestamp()) {
+			log.warn("Skipping vehicle position for {}: missing timestamp", tripId);
+			return;
+		}
+
+		LocalDate serviceDate = parseServiceDate(vehicle.getTrip());
+		if (serviceDate == null) {
+			log.warn("Skipping vehicle position for {}: missing or invalid start_date", tripId);
+			return;
+		}
+
 		Position position = vehicle.getPosition();
 		ProjCoordinate projected = geoOpsService.transformWgsToUtm(position.getLongitude(), position.getLatitude());
 
-		Instant pingTime = vehicle.hasTimestamp()
-				? Instant.ofEpochSecond(vehicle.getTimestamp())
-				: Instant.now();
+		Instant pingTime = Instant.ofEpochSecond(vehicle.getTimestamp());
 
-		tripStateStore.updateTripState(tripId, state -> {
+		tripStateStore.updateTripState(tripId, serviceDate, state -> {
 
-			state.setLastX(projected.x);
-			state.setLastY(projected.y);
+			Double alongRoute = projectAlongRoute(state, vehicle, projected.x, projected.y);
 
-			if (position.hasSpeed()) {
-				state.setCurrentSpeedMps(position.getSpeed());
+			Double offRoute = state.getRoute() == null ? null
+					: geoOpsService.distanceFromRoute(state.getRoute(), projected.x, projected.y);
+
+			if (!state.addGpsPing(projected.x, projected.y, pingTime, alongRoute, offRoute)) {
+				return state;
 			}
+
+			state.updatePositionFrozen(position.hasSpeed() ? position.getSpeed() : null);
+
 			if (vehicle.hasCurrentStopSequence()) {
 				state.setCurrentStopSequence(vehicle.getCurrentStopSequence());
 			}
@@ -210,14 +241,39 @@ public class LiveStateEngine {
 			if (vehicle.hasCurrentStatus()) {
 				state.setCurrentStatus(vehicle.getCurrentStatus().name());
 			}
-
-			state.addGpsPing(projected.x, projected.y, pingTime);
-			state.gpsPingTouch(pingTime);
+			if (vehicle.hasOccupancyStatus()) {
+				state.setOccupancyStatus(vehicle.getOccupancyStatus().name());
+			}
 
 			return state;
 		});
 	}
 
+
+	// Bounded to the stretch between the stops either side of the vehicle's current stop, so a route that
+	// revisits a place can't snap the ping to the wrong pass. Falls back to the whole route when the
+	// message has no stop sequence or it isn't in the schedule; null when the state has no route yet.
+	private Double projectAlongRoute(ActiveTripState state, VehiclePosition vehicle, double x, double y) {
+
+		LineString route = state.getRoute();
+		if (route == null) return null;
+
+		List<StopTimeContext> schedule = state.getStopSchedule();
+		if (schedule != null && vehicle.hasCurrentStopSequence()) {
+
+			for (int i = 0; i < schedule.size(); i++) {
+				if (schedule.get(i).stopSequence() != vehicle.getCurrentStopSequence()) continue;
+
+				double lo = i > 0 ? schedule.get(i - 1).distanceAlongRoute() : 0;
+				double hi = i < schedule.size() - 1
+						? schedule.get(i + 1).distanceAlongRoute()
+						: state.getRouteLengthMeters();
+				return geoOpsService.distanceAlongRouteBetween(route, x, y, lo, hi);
+			}
+		}
+
+		return geoOpsService.distanceAlongRoute(route, x, y);
+	}
 
 	private void publishUpdate(LiveTripUpdate tripUpdate) {
 		if(tripUpdate != null) {

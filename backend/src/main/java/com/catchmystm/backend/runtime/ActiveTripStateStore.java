@@ -1,12 +1,16 @@
 package com.catchmystm.backend.runtime;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 
 import org.springframework.stereotype.Component;
+
+import com.catchmystm.backend.runtime.model.TripSnapshot;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,18 +26,31 @@ public class ActiveTripStateStore {
 		return Optional.ofNullable(store.get(tripId));
 	}
 	
-	public ActiveTripState fetchOrCreateTripState(String tripId) {
-		return store.computeIfAbsent(tripId, id -> {
-            ActiveTripState newState = atsFactory.create(id);
-            newState.feedTouch();
-            return newState;
-        });
+	// Copies the trip's state under the same per-trip lock the writers use, so the copy is consistent.
+	// Never creates a state. Keep the reader short: it runs inside the lock.
+	public Optional<TripSnapshot> snapshotTrip(String tripId) {
+		AtomicReference<TripSnapshot> snapshot = new AtomicReference<>();
+		store.computeIfPresent(tripId, (id, state) -> {
+			snapshot.set(state.toSnapshot());
+			return state;
+		});
+		return Optional.ofNullable(snapshot.get());
+	}
+
+	public ActiveTripState fetchOrCreateTripState(String tripId, LocalDate serviceDate) {
+		return store.compute(tripId, (id, currentState) -> {
+			if (isSameRun(currentState, serviceDate)) return currentState;
+
+			ActiveTripState newState = atsFactory.create(id, serviceDate);
+			newState.feedTouch();
+			return newState;
+		});
 	}
 	
-	public void updateTripState(String tripId, UnaryOperator<ActiveTripState> updateAction) {
+	public void updateTripState(String tripId, LocalDate serviceDate, UnaryOperator<ActiveTripState> updateAction) {
 		store.compute(tripId, (id, currentState) -> {
-			if(currentState == null) {
-				currentState = atsFactory.create(id);
+			if (!isSameRun(currentState, serviceDate)) {
+				currentState = atsFactory.create(id, serviceDate);
 			}
 
 			ActiveTripState updated = updateAction.apply(currentState);
@@ -44,21 +61,16 @@ public class ActiveTripStateStore {
 		});
 	}
 
-	/**
-	 * Trip-update-aware variant: only goes to the database for the full stop schedule/route
-	 * geometry when the trip is actually SCHEDULED. A trip that isn't SCHEDULED (e.g. CANCELED)
-	 * and isn't already tracked gets a bare state (identifiers only) instead of a wasted DB
-	 * round-trip. A previously-bare trip that later turns up SCHEDULED gets upgraded to full.
-	 */
-	public void applyTripUpdate(String tripId, boolean scheduled, String routeId, Integer directionId,
-			UnaryOperator<ActiveTripState> updateAction) {
+	
+	public void applyTripUpdate(String tripId, LocalDate serviceDate, boolean scheduled, String routeId,
+			Integer directionId, UnaryOperator<ActiveTripState> updateAction) {
 		store.compute(tripId, (id, currentState) -> {
-			if (currentState == null) {
+			if (!isSameRun(currentState, serviceDate)) {
 				currentState = scheduled
-						? atsFactory.create(id)
-						: atsFactory.createBare(id, routeId, directionId);
+						? atsFactory.create(id, serviceDate)
+						: atsFactory.createBare(id, routeId, directionId, serviceDate);
 			} else if (scheduled && currentState.getStopSchedule() == null) {
-				currentState = atsFactory.create(id);
+				currentState = atsFactory.create(id, serviceDate);
 			}
 
 			ActiveTripState updated = updateAction.apply(currentState);
@@ -67,6 +79,11 @@ public class ActiveTripStateStore {
 			}
 			return updated;
 		});
+	}
+
+	// The same trip_id runs again on later service dates; a state from another date is a different run.
+	private boolean isSameRun(ActiveTripState state, LocalDate serviceDate) {
+		return state != null && serviceDate.equals(state.getServiceDate());
 	}
 	
 	public void removeTrip(String tripId) {
