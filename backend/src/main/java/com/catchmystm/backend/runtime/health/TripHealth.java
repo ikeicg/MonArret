@@ -14,6 +14,6 @@ public record TripHealth(
 		StopStatus stopStatus,
 		BusProgress progress,
 		StopTiming timing,
-		CrowdingLevel crowding,
+		Occupancy crowding,
 		RouteStatus routeStatus) {
 }

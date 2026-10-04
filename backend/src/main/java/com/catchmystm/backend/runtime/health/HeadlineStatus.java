@@ -9,5 +9,7 @@ public enum HeadlineStatus {
 	LIVE,
 	NOT_TRACKED_YET,
 	STARTED_LATE,
-	NO_LIVE_BUS_FOUND
+	NO_LIVE_BUS_FOUND,
+	// The trip is not in the live feed (not yet in it, or no longer)
+	NO_LIVE_INFO
 }

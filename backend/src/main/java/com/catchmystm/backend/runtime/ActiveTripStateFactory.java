@@ -108,7 +108,7 @@ public class ActiveTripStateFactory {
 		double distanceAlongRoute = geoOpsService.distanceAlongRouteAfter(route, stopLocation.getX(), stopLocation.getY(),
 				minDistanceAlongRoute);
 		
-		return new StopTimeContext(stopId, stopTime.getStop().getStopName(), stopSeq, arrivalTime, arrivalTime, departureTime, departureTime,
+		return new StopTimeContext(stopId, stopTime.getStop().getStopName(), stopSeq, arrivalTime, null, departureTime, null,
 				stopLocation.getX(), stopLocation.getY(), distanceAlongRoute, null);
 
 	}

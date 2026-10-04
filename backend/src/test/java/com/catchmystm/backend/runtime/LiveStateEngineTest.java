@@ -261,7 +261,8 @@ class LiveStateEngineTest {
 
 		StopTimeContext stop1 = schedule.stream().filter(s -> s.stopSequence() == 1).findFirst().orElseThrow();
 		assertThat(stop1.scheduleRelationship()).isNull();
-		assertThat(stop1.estimatedArrival()).isEqualTo(stop1.scheduledArrival());
+		assertThat(stop1.estimatedArrival()).isNull();
+		assertThat(stop1.estimatedDeparture()).isNull();
 	}
 
 	@Test

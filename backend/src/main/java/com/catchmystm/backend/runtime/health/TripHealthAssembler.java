@@ -21,14 +21,23 @@ public final class TripHealthAssembler {
 		BusProgress progress = hasVehicle ? BusProgressCheck.evaluate(trip, stopSequence) : null;
 		boolean passed = progress != null && progress.state() == ProgressState.PASSED;
 		StopTiming timing = passed ? null : TimingCheck.evaluate(trip, stopSequence, now);
-		CrowdingLevel crowding = hasVehicle ? CrowdingCheck.evaluate(trip) : null;
+		Occupancy crowding = hasVehicle ? Occupancy.fromFeed(trip.occupancyStatus()) : null;
 
 		return build(trip, stopSequence, headline, StopStatusCheck.evaluate(trip, stopSequence), progress, timing,
 				crowding, RouteStatusCheck.evaluate(trip));
 	}
 
+	// For a trip with no state in the store: with a healthy feed it is simply not in the feed.
+	public static TripHealth assembleWithoutState(String tripId, int stopSequence, FeedHealth feedHealth) {
+		HeadlineStatus status = feedHealth == FeedHealth.HEALTHY
+				? HeadlineStatus.NO_LIVE_INFO
+				: HeadlineStatus.LIVE_DATA_UNAVAILABLE;
+		return new TripHealth(tripId, null, null, stopSequence, null, new Headline(status, null),
+				null, null, null, null, null);
+	}
+
 	private static TripHealth build(TripSnapshot trip, int stopSequence, Headline headline, StopStatus stopStatus,
-			BusProgress progress, StopTiming timing, CrowdingLevel crowding, RouteStatus routeStatus) {
+			BusProgress progress, StopTiming timing, Occupancy crowding, RouteStatus routeStatus) {
 		return new TripHealth(trip.tripId(), trip.routeId(), trip.directionId(), stopSequence, trip.lastSeenInFeed(),
 				headline, stopStatus, progress, timing, crowding, routeStatus);
 	}

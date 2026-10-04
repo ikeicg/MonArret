@@ -46,7 +46,7 @@ class TripHealthAssemblerTest {
 		assertThat(health.progress().stopsAway()).isEqualTo(3);
 		assertThat(health.progress().movement()).isEqualTo(MovementStatus.MOVING);
 		assertThat(health.timing().status()).isEqualTo(TimingStatus.NORMAL);
-		assertThat(health.crowding()).isEqualTo(CrowdingLevel.FEW_SEATS);
+		assertThat(health.crowding()).isEqualTo(Occupancy.FEW_SEATS_AVAILABLE);
 		assertThat(health.routeStatus()).isEqualTo(RouteStatus.ON_ROUTE);
 	}
 
@@ -113,6 +113,23 @@ class TripHealthAssemblerTest {
 
 		assertThat(TripHealthAssembler.assemble(off, RIDER_STOP, NOW, FeedHealth.HEALTHY).routeStatus())
 				.isEqualTo(RouteStatus.NOT_ON_ROUTE);
+	}
+
+	@Test
+	void tripWithoutState_andAHealthyFeed_hasNoLiveInfo() {
+		TripHealth health = TripHealthAssembler.assembleWithoutState("t9", RIDER_STOP, FeedHealth.HEALTHY);
+
+		assertThat(health.tripId()).isEqualTo("t9");
+		assertThat(health.headline().status()).isEqualTo(HeadlineStatus.NO_LIVE_INFO);
+		assertOnlyHeadline(health);
+	}
+
+	@Test
+	void tripWithoutState_andAFeedThatIsNotHealthy_isLiveDataUnavailable() {
+		assertThat(TripHealthAssembler.assembleWithoutState("t9", RIDER_STOP, FeedHealth.DOWN).headline().status())
+				.isEqualTo(HeadlineStatus.LIVE_DATA_UNAVAILABLE);
+		assertThat(TripHealthAssembler.assembleWithoutState("t9", RIDER_STOP, FeedHealth.STARTING).headline().status())
+				.isEqualTo(HeadlineStatus.LIVE_DATA_UNAVAILABLE);
 	}
 
 	private void assertOnlyHeadline(TripHealth health) {

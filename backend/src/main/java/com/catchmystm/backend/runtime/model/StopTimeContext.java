@@ -8,7 +8,8 @@ import java.time.Instant;
  * Scheduled times are resolved against the trip's service date; estimated times
  * come from the feed's epoch seconds. Both are absolute instants.
  * distanceAlongRoute is meters from the start of the trip's route line to the stop.
- * scheduleRelationship is what the feed last stated for the stop; null until it has stated one.
+ * scheduleRelationship, estimatedArrival and estimatedDeparture are what the feed last stated for the stop;
+ * null until it has stated one.
  */
 public record StopTimeContext(
 		String stopId,

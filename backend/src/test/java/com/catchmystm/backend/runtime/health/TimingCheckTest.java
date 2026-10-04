@@ -91,6 +91,17 @@ class TimingCheckTest {
 	}
 
 	@Test
+	void stopTheFeedNeverGaveATimeFor_hasNoPrediction() {
+		StopTimeContext unstated = new StopTimeContext("stop-3", "Stop 3", 3, SCHEDULED, null, SCHEDULED, null, 0, 0,
+				2000.0, null);
+
+		StopTiming result = TimingCheck.evaluate(live(fiveStopsReplacing(unstated)), RIDER_STOP, NOW);
+
+		assertThat(result.status()).isEqualTo(TimingStatus.NO_PREDICTION);
+		assertThat(result.predicted()).isNull();
+	}
+
+	@Test
 	void missingDepartureTimes_fallBackToArrival() {
 		Instant arrival = SCHEDULED.plusSeconds(400);
 		StopTimeContext arrivalOnly = new StopTimeContext("stop-3", "Stop 3", 3, SCHEDULED, arrival, null, null, 0, 0,
