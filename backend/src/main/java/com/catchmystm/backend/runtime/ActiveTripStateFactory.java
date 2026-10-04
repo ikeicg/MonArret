@@ -34,7 +34,7 @@ public class ActiveTripStateFactory {
 	public ActiveTripState create(String tripId, LocalDate serviceDate) {
 		
 			ActiveTripState activeTrip = new ActiveTripState();
-			Trip baseTrip = tripRepository.findById(tripId).orElseThrow(() -> new IllegalStateException("Trip not found: " + tripId));
+			Trip baseTrip = tripRepository.findById(tripId).orElseThrow(() -> new TripNotFoundException(tripId));
 			
 			// Populate identifiers
 			activeTrip.setTripId(tripId);

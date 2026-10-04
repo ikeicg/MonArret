@@ -100,6 +100,8 @@ public class LiveStateEngine {
 
 			try {
 				processTripUpdate(entity.getTripUpdate());
+			} catch (TripNotFoundException e) {
+				log.debug("Skipping trip update (entity {}): {}", entity.getId(), e.getMessage());
 			} catch (Exception e) {
 				log.warn("Failed to process trip update (entity {}): {}", entity.getId(), e.getMessage());
 			}
@@ -213,6 +215,8 @@ public class LiveStateEngine {
 
 			try {
 				processVehiclePosition(entity.getVehicle());
+			} catch (TripNotFoundException e) {
+				log.debug("Skipping vehicle position (entity {}): {}", entity.getId(), e.getMessage());
 			} catch (Exception e) {
 				log.warn("Failed to process vehicle position (entity {}): {}", entity.getId(), e.getMessage());
 			}
