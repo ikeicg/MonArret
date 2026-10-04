@@ -6,6 +6,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,7 +17,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
-import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.catchmystm.backend.runtime.health.TripHealth;
 import com.catchmystm.backend.runtime.health.TripHealthAssembler;
@@ -28,11 +33,11 @@ class TripHealthControllerTest {
 	@Mock
 	private TripHealthService service;
 
-	private WebTestClient client;
+	private MockMvc mvc;
 
 	@BeforeEach
 	void setUp() {
-		client = WebTestClient.bindToController(new TripHealthController(service)).build();
+		mvc = MockMvcBuilders.standaloneSetup(new TripHealthController(service)).build();
 	}
 
 	private TripHealth health() {
@@ -40,37 +45,36 @@ class TripHealthControllerTest {
 	}
 
 	@Test
-	void firstRequest_returnsThePageWithAnETag() {
+	void firstRequest_returnsThePageWithAnETag() throws Exception {
 		when(service.currentVersion()).thenReturn("v1");
 		when(service.getTripHealth("t1", 4, "v1")).thenReturn(health());
 
-		client.get().uri(PATH).exchange()
-				.expectStatus().isOk()
-				.expectHeader().valueEquals(HttpHeaders.ETAG, "\"v1\"")
-				.expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-cache")
-				.expectBody()
-				.jsonPath("$.success").isEqualTo(true)
-				.jsonPath("$.data.tripId").isEqualTo("t1")
-				.jsonPath("$.data.stopSequence").isEqualTo(4);
+		mvc.perform(get(PATH))
+				.andExpect(status().isOk())
+				.andExpect(header().string(HttpHeaders.ETAG, "\"v1\""))
+				.andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-cache"))
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.tripId").value("t1"))
+				.andExpect(jsonPath("$.data.stopSequence").value(4));
 	}
 
 	@Test
-	void matchingETag_returns304_withoutBuildingThePage() {
+	void matchingETag_returns304_withoutBuildingThePage() throws Exception {
 		when(service.currentVersion()).thenReturn("v1");
 
-		client.get().uri(PATH).header(HttpHeaders.IF_NONE_MATCH, "\"v1\"").exchange()
-				.expectStatus().isNotModified();
+		mvc.perform(get(PATH).header(HttpHeaders.IF_NONE_MATCH, "\"v1\""))
+				.andExpect(status().isNotModified());
 
 		verify(service, never()).getTripHealth(anyString(), anyInt(), any());
 	}
 
 	@Test
-	void staleETag_returnsTheNewPage() {
+	void staleETag_returnsTheNewPage() throws Exception {
 		when(service.currentVersion()).thenReturn("v2");
 		when(service.getTripHealth("t1", 4, "v2")).thenReturn(health());
 
-		client.get().uri(PATH).header(HttpHeaders.IF_NONE_MATCH, "\"v1\"").exchange()
-				.expectStatus().isOk()
-				.expectHeader().valueEquals(HttpHeaders.ETAG, "\"v2\"");
+		mvc.perform(get(PATH).header(HttpHeaders.IF_NONE_MATCH, "\"v1\""))
+				.andExpect(status().isOk())
+				.andExpect(header().string(HttpHeaders.ETAG, "\"v2\""));
 	}
 }
