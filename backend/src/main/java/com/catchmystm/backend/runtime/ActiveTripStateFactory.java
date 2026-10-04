@@ -108,8 +108,8 @@ public class ActiveTripStateFactory {
 		double distanceAlongRoute = geoOpsService.distanceAlongRouteAfter(route, stopLocation.getX(), stopLocation.getY(),
 				minDistanceAlongRoute);
 		
-		return new StopTimeContext(stopId, stopSeq, arrivalTime, arrivalTime, departureTime, departureTime,
-				stopLocation.getX(), stopLocation.getY(), distanceAlongRoute, "SCHEDULED");
+		return new StopTimeContext(stopId, stopTime.getStop().getStopName(), stopSeq, arrivalTime, arrivalTime, departureTime, departureTime,
+				stopLocation.getX(), stopLocation.getY(), distanceAlongRoute, null);
 
 	}
 

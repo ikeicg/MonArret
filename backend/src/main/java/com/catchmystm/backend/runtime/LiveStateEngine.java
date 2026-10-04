@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.proj4j.ProjCoordinate;
@@ -24,7 +25,6 @@ import com.google.transit.realtime.GtfsRealtime.VehiclePosition;
 
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
 @Slf4j
@@ -38,7 +38,8 @@ public class LiveStateEngine {
 	private final GeometricOperationsService geoOpsService;
 	private final Clock montrealClock;
 
-	private final Sinks.Many<LiveTripUpdate> sink = Sinks.many().multicast().directBestEffort();
+	private final AtomicLong lastTripUpdatesHeaderTimestamp = new AtomicLong(-1);
+	private final AtomicLong lastVehiclePositionsHeaderTimestamp = new AtomicLong(-1);
 
 	public LiveStateEngine(StmPoller poller, ActiveTripStateStore tripStateStore,
 			GeometricOperationsService geoOpsService, Clock montrealClock) {
@@ -67,9 +68,17 @@ public class LiveStateEngine {
 	}
 
 	
+	// A repeated or older header timestamp is skipped. A message without one is never skipped.
+	private static boolean isRepeatedMessage(FeedMessage feed, AtomicLong newestHeaderTimestamp) {
+		if (!feed.getHeader().hasTimestamp()) return false;
+		long timestamp = feed.getHeader().getTimestamp();
+		return timestamp <= newestHeaderTimestamp.getAndAccumulate(timestamp, Math::max);
+	}
+
 	void handleTripUpdates(FeedMessage feed) {
 
 		if(feed == null) return;
+		if(isRepeatedMessage(feed, lastTripUpdatesHeaderTimestamp)) return;
 
 		for(FeedEntity entity : feed.getEntityList()) {
 
@@ -145,6 +154,7 @@ public class LiveStateEngine {
 
 				schedule.set(i, new StopTimeContext(
 						current.stopId(),
+						current.stopName(),
 						current.stopSequence(),
 						current.scheduledArrival(),
 						estimatedArrival,
@@ -180,6 +190,7 @@ public class LiveStateEngine {
 	void handleVehiclePositions(FeedMessage feed) {
 
 		if(feed == null) return;
+		if(isRepeatedMessage(feed, lastVehiclePositionsHeaderTimestamp)) return;
 
 		for(FeedEntity entity : feed.getEntityList()) {
 
@@ -273,16 +284,6 @@ public class LiveStateEngine {
 		}
 
 		return geoOpsService.distanceAlongRoute(route, x, y);
-	}
-
-	private void publishUpdate(LiveTripUpdate tripUpdate) {
-		if(tripUpdate != null) {
-			sink.tryEmitNext(tripUpdate);
-		}
-	}
-
-	public Flux<LiveTripUpdate> getPublisher(){
-		return sink.asFlux();
 	}
 
 }

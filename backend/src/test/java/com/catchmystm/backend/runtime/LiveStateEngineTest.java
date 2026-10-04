@@ -117,6 +117,85 @@ class LiveStateEngineTest {
 		verify(tripRepository, times(1)).findById("trip-2");
 	}
 
+	// --- feed message deduplication ---
+
+	@Test
+	void tripUpdatesMessage_withRepeatedHeaderTimestamp_isSkipped() {
+
+		engine.handleTripUpdates(withHeaderTimestamp(feedWithTripUpdate(
+				tripUpdate("trip-d1", TripDescriptor.ScheduleRelationship.CANCELED, "10", 0)), 1000));
+
+		engine.handleTripUpdates(withHeaderTimestamp(feedWithTripUpdate(
+				tripUpdate("trip-d1", TripDescriptor.ScheduleRelationship.SCHEDULED, "10", 0)), 1000));
+
+		assertThat(store.fetchTripState("trip-d1").orElseThrow().getScheduleRelationship()).isEqualTo("CANCELED");
+		verify(tripRepository, never()).findById("trip-d1");
+	}
+
+	@Test
+	void tripUpdatesMessage_withNewHeaderTimestamp_isProcessed() {
+
+		engine.handleTripUpdates(withHeaderTimestamp(feedWithTripUpdate(
+				tripUpdate("trip-d2", TripDescriptor.ScheduleRelationship.CANCELED, "10", 0)), 1000));
+
+		stubStaticSchedule("trip-d2");
+		engine.handleTripUpdates(withHeaderTimestamp(feedWithTripUpdate(
+				tripUpdate("trip-d2", TripDescriptor.ScheduleRelationship.SCHEDULED, "10", 0)), 1020));
+
+		assertThat(store.fetchTripState("trip-d2").orElseThrow().getScheduleRelationship()).isEqualTo("SCHEDULED");
+	}
+
+	@Test
+	void vehiclePositionsMessage_withRepeatedHeaderTimestamp_isSkipped() {
+
+		stubStaticSchedule("trip-d3");
+		engine.handleVehiclePositions(withHeaderTimestamp(feedWithVehicle(
+				vehicleAt("trip-d3", 45.52f, -73.57f).setTimestamp(EPOCH_T0).build()), 1000));
+
+		engine.handleVehiclePositions(withHeaderTimestamp(feedWithVehicle(
+				vehicleAt("trip-d3", 45.53f, -73.58f).setTimestamp(EPOCH_T0 + 20).build()), 1000));
+
+		assertThat(store.fetchTripState("trip-d3").orElseThrow().getRecentPings()).hasSize(1);
+	}
+
+	@Test
+	void messageWithAnOlderHeaderTimestamp_isSkipped() {
+
+		stubStaticSchedule("trip-d6");
+		engine.handleVehiclePositions(withHeaderTimestamp(feedWithVehicle(
+				vehicleAt("trip-d6", 45.52f, -73.57f).setTimestamp(EPOCH_T0 + 20).build()), 1020));
+
+		engine.handleVehiclePositions(withHeaderTimestamp(feedWithVehicle(
+				vehicleAt("trip-d6", 45.53f, -73.58f).setTimestamp(EPOCH_T0 + 40).build()), 1000));
+
+		assertThat(store.fetchTripState("trip-d6").orElseThrow().getRecentPings()).hasSize(1);
+	}
+
+	@Test
+	void messagesWithoutAHeaderTimestamp_areNeverSkipped() {
+
+		stubStaticSchedule("trip-d4");
+		engine.handleVehiclePositions(feedWithVehicle(
+				vehicleAt("trip-d4", 45.52f, -73.57f).setTimestamp(EPOCH_T0).build()));
+		engine.handleVehiclePositions(feedWithVehicle(
+				vehicleAt("trip-d4", 45.53f, -73.58f).setTimestamp(EPOCH_T0 + 20).build()));
+
+		assertThat(store.fetchTripState("trip-d4").orElseThrow().getRecentPings()).hasSize(2);
+	}
+
+	@Test
+	void theTwoFeeds_trackTheirHeaderTimestampsSeparately() {
+
+		stubStaticSchedule("trip-d5");
+		engine.handleTripUpdates(withHeaderTimestamp(feedWithTripUpdate(
+				tripUpdate("trip-d5", TripDescriptor.ScheduleRelationship.SCHEDULED, "10", 0)), 1000));
+
+		engine.handleVehiclePositions(withHeaderTimestamp(feedWithVehicle(
+				vehicleAt("trip-d5", 45.52f, -73.57f).setTimestamp(EPOCH_T0).build()), 1000));
+
+		assertThat(store.fetchTripState("trip-d5").orElseThrow().getRecentPings()).hasSize(1);
+	}
+
 	@Test
 	void bareTripLaterBecomesScheduled_getsUpgradedToFull() {
 
@@ -181,7 +260,7 @@ class LiveStateEngineTest {
 				.isEqualTo(Instant.ofEpochSecond(arrivalEpoch));
 
 		StopTimeContext stop1 = schedule.stream().filter(s -> s.stopSequence() == 1).findFirst().orElseThrow();
-		assertThat(stop1.scheduleRelationship()).isEqualTo("SCHEDULED");
+		assertThat(stop1.scheduleRelationship()).isNull();
 		assertThat(stop1.estimatedArrival()).isEqualTo(stop1.scheduledArrival());
 	}
 
@@ -639,6 +718,12 @@ class LiveStateEngineTest {
 		return FeedMessage.newBuilder()
 				.setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0").build())
 				.addEntity(FeedEntity.newBuilder().setId("1").setTripUpdate(tripUpdate).build())
+				.build();
+	}
+
+	private FeedMessage withHeaderTimestamp(FeedMessage feed, long timestamp) {
+		return feed.toBuilder()
+				.setHeader(feed.getHeader().toBuilder().setTimestamp(timestamp).build())
 				.build();
 	}
 
