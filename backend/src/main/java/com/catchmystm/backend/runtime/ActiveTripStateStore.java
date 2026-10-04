@@ -1,10 +1,12 @@
 package com.catchmystm.backend.runtime;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 
@@ -90,6 +92,22 @@ public class ActiveTripStateStore {
         store.remove(tripId);
     }
 	
+	// Staleness is re-checked inside the per-trip lock, so a state touched by the feed meanwhile is kept.
+	public int evictStale(Instant cutoff) {
+		AtomicInteger evicted = new AtomicInteger();
+		for (String tripId : store.keySet()) {
+			store.computeIfPresent(tripId, (id, state) -> {
+				Instant lastSeen = state.getLastSeenInFeed();
+				if (lastSeen != null && lastSeen.isBefore(cutoff)) {
+					evicted.incrementAndGet();
+					return null;
+				}
+				return state;
+			});
+		}
+		return evicted.get();
+	}
+
 	public int getActiveTripCount() {
         return store.size();
     }

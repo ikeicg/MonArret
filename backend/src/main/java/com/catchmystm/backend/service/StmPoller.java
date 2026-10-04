@@ -1,6 +1,7 @@
 package com.catchmystm.backend.service;
 
 import java.time.Duration;
+import java.time.Instant;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -25,6 +26,11 @@ public class StmPoller {
     private final String apiKey;
     private final Duration transitFeedPollInterval = Duration.ofSeconds(20);
 
+    // Three missed poll cycles
+    static final Duration FEED_STALE_AFTER = Duration.ofSeconds(60);
+    private volatile Instant lastVehiclePositionsSuccess;
+    private volatile Instant lastTripUpdatesSuccess;
+
     private final Sinks.Many<FeedMessage> vehiclePositionSink = Sinks.many().multicast().directBestEffort();
     private final Sinks.Many<FeedMessage> tripUpdateSink = Sinks.many().multicast().directBestEffort();
 
@@ -47,8 +53,14 @@ public class StmPoller {
        
         Flux.interval(Duration.ZERO, transitFeedPollInterval)
                 .flatMap(tick -> Mono.zip(
-                        fetchGtfsFeed("/vehiclePositions").doOnNext(vehiclePositionSink::tryEmitNext),
-                        fetchGtfsFeed("/tripUpdates").doOnNext(tripUpdateSink::tryEmitNext)
+                        fetchGtfsFeed("/vehiclePositions").doOnNext(feed -> {
+                            vehiclePositionSink.tryEmitNext(feed);
+                            markVehiclePositionsReceived(Instant.now());
+                        }),
+                        fetchGtfsFeed("/tripUpdates").doOnNext(feed -> {
+                            tripUpdateSink.tryEmitNext(feed);
+                            markTripUpdatesReceived(Instant.now());
+                        })
                 ))
                 .onErrorContinue((throwable, obj) -> 
                         log.error("Recovered from error during STM polling cycle: {}", throwable.getMessage())
@@ -76,6 +88,28 @@ public class StmPoller {
                     log.error("Failed to fetch STM GTFS data from {}: {}", endpoint, ex.getMessage());
                     return Mono.empty(); 
                 });
+    }
+
+    void markVehiclePositionsReceived(Instant at) {
+        lastVehiclePositionsSuccess = at;
+    }
+
+    void markTripUpdatesReceived(Instant at) {
+        lastTripUpdatesSuccess = at;
+    }
+
+    public FeedHealth getFeedHealth() {
+        return getFeedHealth(Instant.now());
+    }
+
+    public FeedHealth getFeedHealth(Instant now) {
+        Instant vehicles = lastVehiclePositionsSuccess;
+        Instant updates = lastTripUpdatesSuccess;
+        if (vehicles == null && updates == null) return FeedHealth.STARTING;
+        if (vehicles == null || updates == null) return FeedHealth.DOWN;
+
+        Instant cutoff = now.minus(FEED_STALE_AFTER);
+        return vehicles.isBefore(cutoff) || updates.isBefore(cutoff) ? FeedHealth.DOWN : FeedHealth.HEALTHY;
     }
 
     public Flux<FeedMessage> getVehiclePositionsPublisher() {
