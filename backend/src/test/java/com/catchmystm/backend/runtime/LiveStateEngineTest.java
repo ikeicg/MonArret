@@ -698,6 +698,44 @@ class LiveStateEngineTest {
 
 	// --- helpers ---
 
+	// --- feedVersion ---
+
+	@Test
+	void feedVersion_movesOnceAMessageIsIngested_andNotOnARepeat() {
+
+		String before = engine.feedVersion();
+		FeedMessage message = withHeaderTimestamp(feedWithTripUpdate(
+				tripUpdate("trip-1", TripDescriptor.ScheduleRelationship.CANCELED, "10", 0)), EPOCH_T0);
+
+		engine.handleTripUpdates(message);
+		String afterFirst = engine.feedVersion();
+		engine.handleTripUpdates(message);
+
+		assertThat(afterFirst).isNotEqualTo(before);
+		assertThat(engine.feedVersion()).isEqualTo(afterFirst);
+	}
+
+	@Test
+	void feedVersion_changesWhenEitherFeedAdvances() {
+
+		engine.handleTripUpdates(withHeaderTimestamp(emptyFeed(), EPOCH_T0));
+		String afterTripUpdates = engine.feedVersion();
+
+		engine.handleVehiclePositions(withHeaderTimestamp(emptyFeed(), EPOCH_T0));
+		String afterVehicles = engine.feedVersion();
+
+		engine.handleTripUpdates(withHeaderTimestamp(emptyFeed(), EPOCH_T0 + 20));
+
+		assertThat(afterVehicles).isNotEqualTo(afterTripUpdates);
+		assertThat(engine.feedVersion()).isNotEqualTo(afterVehicles);
+	}
+
+	private FeedMessage emptyFeed() {
+		return FeedMessage.newBuilder()
+				.setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0").build())
+				.build();
+	}
+
 	private TripUpdate tripUpdate(String tripId, TripDescriptor.ScheduleRelationship relationship, String routeId,
 			int directionId) {
 		return tripUpdate(tripId, relationship, routeId, directionId, SERVICE_DATE);

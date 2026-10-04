@@ -41,6 +41,11 @@ public class LiveStateEngine {
 	private final AtomicLong lastTripUpdatesHeaderTimestamp = new AtomicLong(-1);
 	private final AtomicLong lastVehiclePositionsHeaderTimestamp = new AtomicLong(-1);
 
+	// Header timestamps of the newest messages whose entities are fully ingested. Unlike the two above,
+	// these only move once the store reflects the message.
+	private final AtomicLong ingestedTripUpdatesTimestamp = new AtomicLong(-1);
+	private final AtomicLong ingestedVehiclePositionsTimestamp = new AtomicLong(-1);
+
 	public LiveStateEngine(StmPoller poller, ActiveTripStateStore tripStateStore,
 			GeometricOperationsService geoOpsService, Clock montrealClock) {
 		tripUpdatesFeed = poller.getTripUpdatesPublisher();
@@ -75,6 +80,15 @@ public class LiveStateEngine {
 		return timestamp <= newestHeaderTimestamp.getAndAccumulate(timestamp, Math::max);
 	}
 
+	// Identifies the live data the store currently holds: changes after each ingested message of either feed.
+	public String feedVersion() {
+		return ingestedTripUpdatesTimestamp.get() + "-" + ingestedVehiclePositionsTimestamp.get();
+	}
+
+	private long ingestedStamp(FeedMessage feed) {
+		return feed.getHeader().hasTimestamp() ? feed.getHeader().getTimestamp() : montrealClock.instant().getEpochSecond();
+	}
+
 	void handleTripUpdates(FeedMessage feed) {
 
 		if(feed == null) return;
@@ -92,6 +106,7 @@ public class LiveStateEngine {
 
 		}
 
+		ingestedTripUpdatesTimestamp.set(ingestedStamp(feed));
 	}
 
 	private void processTripUpdate(TripUpdate tripUpdate) {
@@ -203,6 +218,8 @@ public class LiveStateEngine {
 			}
 
 		}
+
+		ingestedVehiclePositionsTimestamp.set(ingestedStamp(feed));
 	}
 
 	private void processVehiclePosition(VehiclePosition vehicle) {
