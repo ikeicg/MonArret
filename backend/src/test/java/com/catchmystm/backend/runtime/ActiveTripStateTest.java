@@ -112,40 +112,4 @@ class ActiveTripStateTest {
 		assertThat(a).isEqualTo(a);
 	}
 
-	@Test
-	void closeFollowerCycleAfterCycle_countsUp_andConfirmsAtTheThreshold() {
-		state.recordCloseFollower(90);
-		state.recordCloseFollower(85);
-		assertThat(state.isBunchingConfirmed()).isFalse();
-
-		state.recordCloseFollower(80);
-
-		assertThat(state.getConsecutiveCloseCycles()).isEqualTo(ActiveTripState.BUNCHING_CONFIRM_CYCLES);
-		assertThat(state.isBunchingConfirmed()).isTrue();
-		assertThat(state.getBunchingGapSeconds()).isEqualTo(80);
-	}
-
-	@Test
-	void followerNoLongerClose_resetsTheRun_andTheGap() {
-		for (int i = 0; i < 4; i++) {
-			state.recordCloseFollower(90);
-		}
-
-		state.clearFollower();
-
-		assertThat(state.getConsecutiveCloseCycles()).isZero();
-		assertThat(state.getBunchingGapSeconds()).isNull();
-		assertThat(state.isBunchingConfirmed()).isFalse();
-	}
-
-	@Test
-	void closeAgainAfterAReset_countsFromOne() {
-		state.recordCloseFollower(90);
-		state.recordCloseFollower(90);
-		state.clearFollower();
-
-		state.recordCloseFollower(90);
-
-		assertThat(state.getConsecutiveCloseCycles()).isEqualTo(1);
-	}
 }

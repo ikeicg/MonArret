@@ -54,29 +54,6 @@ public class ActiveTripState {
     public static final double FROZEN_MOVEMENT_METERS = 2.0;
     private boolean positionFrozen;
 
-    // Bunching result, held on the leader: the time gap to the bus directly behind it and how many
-    // consecutive cycles some bus has been close behind.
-    public static final int BUNCHING_CONFIRM_CYCLES = 3;
-    private Double bunchingGapSeconds;
-    private int consecutiveCloseCycles;
-
-
-    public void recordCloseFollower(double gapSeconds) {
-        this.consecutiveCloseCycles++;
-        this.bunchingGapSeconds = gapSeconds;
-    }
-
-    // No close follower this cycle, or it could not be judged.
-    public void clearFollower() {
-        this.bunchingGapSeconds = null;
-        this.consecutiveCloseCycles = 0;
-    }
-
-    public boolean isBunchingConfirmed() {
-        return consecutiveCloseCycles >= BUNCHING_CONFIRM_CYCLES;
-    }
-
-
     // Returns false when the ping is not newer than the latest one (repeat or out of order) and is dropped.
     public boolean addGpsPing(double x, double y, Instant timestamp, Double alongRoute, Double offRouteMeters) {
         GpsPing latest = recentPings.peekLast();
@@ -100,12 +77,7 @@ public class ActiveTripState {
     // null with fewer than two pings.
     public Double metersMovedInWindow() {
         if (recentPings.size() < 2) return null;
-        GpsPing first = recentPings.peekFirst();
-        GpsPing last = recentPings.peekLast();
-        if (first.alongRoute() != null && last.alongRoute() != null) {
-            return Math.abs(last.alongRoute() - first.alongRoute());
-        }
-        return Math.hypot(last.x() - first.x(), last.y() - first.y());
+        return GpsPing.metersBetween(recentPings.peekFirst(), recentPings.peekLast());
     }
 
     // Called after each accepted ping with the speed the feed published for it (null when absent).
@@ -121,8 +93,7 @@ public class ActiveTripState {
                 stopSchedule == null ? List.of() : List.copyOf(stopSchedule),
                 List.copyOf(recentPings),
                 lastSeenInFeed, currentStopSequence, currentStopId, currentStatus, occupancyStatus,
-                scheduleRelationship, positionFrozen, bunchingGapSeconds, consecutiveCloseCycles,
-                isBunchingConfirmed());
+                scheduleRelationship, positionFrozen);
     }
 
     // Audit methods

@@ -42,7 +42,6 @@ class ActiveTripStateStoreTest {
 		store.applyTripUpdate("t1", DAY, false, "10", 0, s -> {
 			s.setOccupancyStatus("FEW_SEATS_AVAILABLE");
 			s.addGpsPing(1, 2, T0, 50.0, 3.0);
-			s.recordCloseFollower(70);
 			return s;
 		});
 
@@ -53,9 +52,6 @@ class ActiveTripStateStoreTest {
 		assertThat(snap.stopSchedule()).isEmpty();
 		assertThat(snap.occupancyStatus()).isEqualTo("FEW_SEATS_AVAILABLE");
 		assertThat(snap.latestPing().alongRoute()).isEqualTo(50.0);
-		assertThat(snap.bunchingGapSeconds()).isEqualTo(70.0);
-		assertThat(snap.consecutiveCloseCycles()).isEqualTo(1);
-		assertThat(snap.bunchingConfirmed()).isFalse();
 		assertThat(snap.lastSeenInFeed()).isNotNull();
 	}
 

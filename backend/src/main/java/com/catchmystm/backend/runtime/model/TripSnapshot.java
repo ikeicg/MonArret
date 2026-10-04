@@ -20,12 +20,15 @@ public record TripSnapshot(
 		String currentStatus,
 		String occupancyStatus,
 		String scheduleRelationship,
-		boolean positionFrozen,
-		Double bunchingGapSeconds,
-		int consecutiveCloseCycles,
-		boolean bunchingConfirmed) {
+		boolean positionFrozen) {
 
 	public GpsPing latestPing() {
 		return recentPings.isEmpty() ? null : recentPings.get(recentPings.size() - 1);
+	}
+
+	// Meters moved between the oldest and newest ping; null with fewer than two pings.
+	public Double metersMovedInWindow() {
+		if (recentPings.size() < 2) return null;
+		return GpsPing.metersBetween(recentPings.get(0), latestPing());
 	}
 }
