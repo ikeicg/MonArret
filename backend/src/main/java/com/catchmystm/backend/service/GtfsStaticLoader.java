@@ -20,6 +20,9 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -54,17 +57,21 @@ public class GtfsStaticLoader implements CommandLineRunner {
     private RestClient restClient;
     private JdbcTemplate jdbcTemplate;
     private AppConfigRepository appConfigRepository;
-    
+    private CacheManager redisCacheManager;
+
     @Value("${gtfs.stm.override-url:}")
     private String overrideUrl;
     
-    public GtfsStaticLoader(RestClient restClient, JdbcTemplate jdbcTemplate, AppConfigRepository appConfigRepository) {
+    public GtfsStaticLoader(RestClient restClient, JdbcTemplate jdbcTemplate, AppConfigRepository appConfigRepository,
+    		@Qualifier("redisCacheManager") CacheManager redisCacheManager) {
 		super();
 		this.restClient = restClient;
 		this.jdbcTemplate = jdbcTemplate;
 		this.appConfigRepository = appConfigRepository;
+		this.redisCacheManager = redisCacheManager;
 	}
     
+    private static final List<String> SEARCH_CACHES = List.of("routes", "route-directions", "daily-departures");
     private static final String DEFAULT_STM_GTFS_URL = "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip";
     private final GeometryFactory geometryFactory = new GeometryFactory();
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -93,7 +100,8 @@ public class GtfsStaticLoader implements CommandLineRunner {
             
             if (validateStagingSchema()) {
                 swapStagingToStatic();
-                
+                clearSearchCaches();
+
                 // Update application based on feed info
                 FeedInfo currentFeedInfo = (FeedInfo) entities.get("feed_info").get(0);
                 updateAppConfig(currentFeedInfo);
@@ -985,6 +993,18 @@ public class GtfsStaticLoader implements CommandLineRunner {
         }
     }
     
+    // Cached search results come from the old schedule. A Redis failure must not fail a completed swap.
+    private void clearSearchCaches() {
+        for (String name : SEARCH_CACHES) {
+            try {
+                Cache cache = redisCacheManager.getCache(name);
+                if (cache != null) cache.clear();
+            } catch (Exception e) {
+                log.warn("Could not clear cache {} after schema swap: {}", name, e.getMessage());
+            }
+        }
+    }
+
     private void updateAppConfig(FeedInfo feedInfo) {
         log.info("Updating app config after successful GTFS load...");
 

@@ -3,11 +3,13 @@ package com.catchmystm.backend.config;
 import java.time.Duration;
 import java.util.List;
 
-import org.springframework.boot.cache.autoconfigure.RedisCacheManagerBuilderCustomizer;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
+import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
@@ -24,8 +26,11 @@ import tools.jackson.databind.ObjectMapper;
 @EnableCaching
 public class RedisConfiguration {
 
+    // Primary, so @Cacheable without a cacheManager keeps using Redis.
     @Bean
-    public RedisCacheManagerBuilderCustomizer redisCacheManagerBuilderCustomizer(
+    @Primary
+    public RedisCacheManager redisCacheManager(
+            RedisConnectionFactory connectionFactory,
             ObjectMapper objectMapper) {
 
         JavaType routeResponseType =
@@ -81,7 +86,8 @@ public class RedisConfiguration {
                         		RedisSerializationContext.SerializationPair
                         			.fromSerializer(new StringRedisSerializer()));
 
-        return builder -> builder
+        return RedisCacheManager.builder(connectionFactory)
+                .cacheDefaults(RedisCacheConfiguration.defaultCacheConfig())
 
                 .withCacheConfiguration(
                         "routes",
@@ -105,6 +111,8 @@ public class RedisConfiguration {
                                 RedisSerializationContext.SerializationPair
                                         .fromSerializer(departureSerializer)
                         )
-                );
+                )
+
+                .build();
     }
 }
