@@ -26,6 +26,9 @@ public class StmPoller {
     private final String apiKey;
     private final Duration transitFeedPollInterval = Duration.ofSeconds(20);
 
+    // WebClient's default cap is 256 KB, below the size of the tripUpdates feed.
+    static final int MAX_FEED_BYTES = 16 * 1024 * 1024;
+
     // Three missed poll cycles
     static final Duration FEED_STALE_AFTER = Duration.ofSeconds(60);
     private volatile Instant lastVehiclePositionsSuccess;
@@ -42,9 +45,10 @@ public class StmPoller {
         this.apiKey = apiKey;
         this.webClient = webClientBuilder
             .baseUrl(stmApiUrl)
-            .codecs(configurer -> configurer
-                    .defaultCodecs()
-                    .protobufDecoder(new ProtobufDecoder())) 
+            .codecs(configurer -> {
+                configurer.defaultCodecs().maxInMemorySize(MAX_FEED_BYTES);
+                configurer.defaultCodecs().protobufDecoder(new ProtobufDecoder());
+            })
             .build();
     }
 
