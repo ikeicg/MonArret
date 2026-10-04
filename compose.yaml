@@ -8,33 +8,66 @@ services:
     image: csm-backend
 
     ports:
-      - "80:8080"
+      - "${APP_PORT:-8080}:8080"
 
     environment:
-      DB_URL: ${DB_URL}
+      DB_URL: jdbc:postgresql://postgis:5432/${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      GTFS_URL_OVERRIDE: ${GTFS_URL_OVERRIDE}
+      REDIS_HOST: redis
+      STM_API_KEY: ${STM_API_KEY}
+      STM_API_URL: ${STM_API_URL:-https://api.stm.info/pub/od/gtfs-rt/ic/v2}
+      GTFS_URL_OVERRIDE: ${GTFS_URL_OVERRIDE:-}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
+
+    mem_limit: ${BACKEND_MEM_LIMIT:-2g}
 
     depends_on:
       postgis:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    restart: unless-stopped
 
   postgis:
-    image: postgis/postgis:18-3.6
+    image: imresamu/postgis:18-3.6-bookworm
 
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
 
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+
     volumes:
       - postgres-data:/var/lib/postgresql
+
+    mem_limit: ${POSTGRES_MEM_LIMIT:-1g}
 
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${DB_USER}", "-d", "${DB_NAME}"]
       interval: 5s
       timeout: 5s
+      retries: 5
+
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+
+    command: ["redis-server", "--maxmemory", "100mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+
+    ports:
+      - "127.0.0.1:6379:6379"
+
+    mem_limit: 192m
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
       retries: 5
 
     restart: unless-stopped
