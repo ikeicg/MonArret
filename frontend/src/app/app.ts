@@ -1,19 +1,9 @@
-import { Component, inject } from '@angular/core';
-import { RouterLink, RouterOutlet } from '@angular/router';
-import { TranslocoPipe } from '@jsverse/transloco';
-
-import { LANGUAGES, Language, LanguageService } from './core/language';
+import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, TranslocoPipe],
-  templateUrl: './app.html',
+  imports: [RouterOutlet],
+  template: '<router-outlet />',
 })
-export class App {
-  protected readonly languages = LANGUAGES;
-  protected readonly language = inject(LanguageService);
-
-  protected choose(lang: Language): void {
-    this.language.set(lang);
-  }
-}
+export class App {}

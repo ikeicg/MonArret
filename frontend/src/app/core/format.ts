@@ -5,15 +5,21 @@ const MONTREAL = 'America/Montreal';
 // The health payload carries UTC instants; riders read Montreal clock time.
 export function formatInstant(iso: string, lang: string): string {
   return new Intl.DateTimeFormat(lang, {
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
     timeZone: MONTREAL,
   }).format(new Date(iso));
 }
 
-// The departures list already carries Montreal local time without a zone: 2026-10-04T18:36:00.
-export function formatLocalDeparture(localDateTime: string): string {
-  return localDateTime.substring(11, 16);
+// The departures list carries Montreal local time without a zone (2026-10-04T18:36:00). Only the clock
+// is read, so it is formatted as a plain UTC time of day and reads the same in every browser time zone.
+export function formatLocalDeparture(localDateTime: string, lang: string): string {
+  const [hours, minutes] = localDateTime.substring(11, 16).split(':').map(Number);
+  return new Intl.DateTimeFormat(lang, {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
 }
 
 export function minutesFromSeconds(seconds: number): number {

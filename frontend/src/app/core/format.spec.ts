@@ -1,13 +1,14 @@
 import { crowdingLevel, describeDelay, formatInstant, formatLocalDeparture, minutesFromSeconds } from './format';
 
 describe('format', () => {
-  it('shows a local departure as hours and minutes', () => {
-    expect(formatLocalDeparture('2026-10-04T18:36:00')).toBe('18:36');
+  it('shows a local departure in each language clock style', () => {
+    expect(formatLocalDeparture('2026-10-04T18:36:00', 'en')).toMatch(/^6:36\sPM$/);
+    expect(formatLocalDeparture('2026-10-04T18:36:00', 'fr')).toMatch(/^18\D+36$/);
   });
 
   it('shows an instant in Montreal time', () => {
     // 22:36 UTC is 18:36 in Montreal in October (EDT).
-    expect(formatInstant('2026-10-04T22:36:07Z', 'en-CA')).toMatch(/6:36/);
+    expect(formatInstant('2026-10-04T22:36:07Z', 'en')).toMatch(/^6:36\sPM$/);
   });
 
   it('rounds a delay to whole minutes, at least one', () => {

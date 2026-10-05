@@ -2,13 +2,14 @@ import { Component, computed, inject, input } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { map, scan, switchMap } from 'rxjs';
+import { interval, map, scan, startWith, switchMap } from 'rxjs';
 
 import { ApiService } from '../core/api.service';
-import { crowdingLevel, describeDelay, formatInstant } from '../core/format';
+import { crowdingLevel, describeDelay, formatInstant, formatLocalDeparture } from '../core/format';
 import { LanguageService } from '../core/language';
 import { HeadlineStatus, TripHealth } from '../core/models';
-import { poll } from '../core/poll';
+import { POLL_INTERVAL_MS, poll } from '../core/poll';
+import { BrandBar } from '../shared/brand-bar';
 
 interface TripState {
   health: TripHealth | null;
@@ -18,10 +19,11 @@ interface TripState {
 }
 
 const INITIAL: TripState = { health: null, failed: false, refreshedAt: null };
+const REFRESH_SECONDS = POLL_INTERVAL_MS / 1000;
 
 @Component({
   selector: 'app-trip-page',
-  imports: [RouterLink, TranslocoPipe],
+  imports: [RouterLink, TranslocoPipe, BrandBar],
   templateUrl: './trip-page.html',
 })
 export class TripPage {
@@ -31,6 +33,12 @@ export class TripPage {
   // Bound from the route parameters.
   readonly tripId = input.required<string>();
   readonly stopSequence = input.required<string>();
+
+  // Bound from the query string the picker adds; absent on a shared link.
+  readonly route = input<string>();
+  readonly routeName = input<string>();
+  readonly stopName = input<string>();
+  readonly departs = input<string>();
 
   protected readonly state = toSignal(
     toObservable(computed(() => ({ tripId: this.tripId(), stopSequence: Number(this.stopSequence()) }))).pipe(
@@ -49,29 +57,55 @@ export class TripPage {
     { initialValue: INITIAL },
   );
 
-  protected readonly refreshed = computed(() => {
-    const at = this.state().refreshedAt;
-    return at === null ? null : formatInstant(new Date(at).toISOString(), this.language.current);
+  private readonly now = toSignal(interval(1000).pipe(startWith(0), map(() => Date.now())), {
+    initialValue: Date.now(),
   });
 
-  protected time(iso: string): string {
-    return formatInstant(iso, this.language.current);
-  }
+  protected readonly secondsSinceRefresh = computed(() => {
+    const at = this.state().refreshedAt;
+    return at === null ? null : Math.max(0, Math.floor((this.now() - at) / 1000));
+  });
+
+  protected readonly secondsToRefresh = computed(() => {
+    const since = this.secondsSinceRefresh();
+    return since === null ? null : Math.max(0, REFRESH_SECONDS - since);
+  });
+
+  protected readonly progress = computed(() => {
+    const since = this.secondsSinceRefresh();
+    return since === null ? 0 : Math.min(100, Math.round((since / REFRESH_SECONDS) * 100));
+  });
+
+  protected readonly tone = computed(() => {
+    const health = this.state().health;
+    return health ? toneOf(health.headline.status) : 'neutral';
+  });
+
+  protected readonly routeLabel = computed(() => this.route() ?? this.state().health?.routeId ?? null);
+
+  protected readonly departsLabel = computed(() => {
+    const at = this.departs();
+    return at ? formatLocalDeparture(at, this.language.current) : null;
+  });
 
   protected readonly delay = describeDelay;
   protected readonly crowding = crowdingLevel;
 
-  protected tone(status: HeadlineStatus): string {
-    switch (status) {
-      case 'LIVE':
-        return 'ok';
-      case 'CANCELLED':
-        return 'bad';
-      case 'LIVE_DATA_UNAVAILABLE':
-      case 'TRIP_FINISHED':
-        return 'neutral';
-      default:
-        return 'warn';
-    }
+  protected time(iso: string): string {
+    return formatInstant(iso, this.language.current);
+  }
+}
+
+function toneOf(status: HeadlineStatus): 'ok' | 'warn' | 'bad' | 'neutral' {
+  switch (status) {
+    case 'LIVE':
+      return 'ok';
+    case 'CANCELLED':
+      return 'bad';
+    case 'LIVE_DATA_UNAVAILABLE':
+    case 'TRIP_FINISHED':
+      return 'neutral';
+    default:
+      return 'warn';
   }
 }

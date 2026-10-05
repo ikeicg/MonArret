@@ -1,0 +1,57 @@
+// Design tokens. Every colour, size and radius in the app comes from here.
+:root {
+  color-scheme: light;
+
+  --font-display: 'Bricolage Grotesque Variable', system-ui, sans-serif;
+  --font-body: 'Figtree Variable', system-ui, sans-serif;
+
+  // Brand
+  --color-primary: #2457f5;
+  --color-primary-ink: #1b3fb8;
+  --color-sun: #ffd23f;
+
+  // Page
+  --color-bg: #f6f7fb;
+  --color-surface: #ffffff;
+  --color-border: #d9deea;
+  --color-text: #111827;
+  --color-text-muted: #4b5563;
+
+  // Status: solid banner colours and the text on them
+  --color-ok: #0c8040;
+  --color-warn: #ffd23f;
+  --color-bad: #c62828;
+  --color-neutral: #475569;
+  --color-on-solid: #ffffff;
+  --color-on-warn: #111827;
+
+  // Status: soft tints for cards that report a problem
+  --color-caution-bg: #fff1c2;
+  --color-caution-ink: #5c4000;
+  --color-problem-bg: #fde8e8;
+  --color-problem-ink: #8a1c1c;
+
+  // Shape and depth
+  --radius-tile: 18px;
+  --radius-field: 14px;
+  --radius-banner: 28px;
+  --radius-pill: 999px;
+  --shadow-tile: 0 1px 2px rgba(17, 24, 39, 0.06), 0 6px 16px rgba(36, 87, 245, 0.08);
+
+  // Spacing
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
+  // Type scale
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 2rem;
+  --text-hero: 3.5rem;
+
+  --content-width: 36rem;
+}

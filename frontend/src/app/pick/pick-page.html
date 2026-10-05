@@ -1,83 +1,114 @@
-<section class="card">
-  <label class="field">
-    <span class="label">{{ 'pick.routeLabel' | transloco }}</span>
-    <span class="inline">
-      <input
-        #routeInput
-        type="text"
-        inputmode="numeric"
-        autocomplete="off"
-        [placeholder]="'pick.routePlaceholder' | transloco"
-        (keydown.enter)="findRoute(routeInput.value)"
-      />
-      <button type="button" class="primary" (click)="findRoute(routeInput.value)">
-        {{ 'pick.find' | transloco }}
-      </button>
-    </span>
-  </label>
+<header class="banner">
+  <div class="banner-inner">
+    <app-brand-bar />
+    <h1 class="banner-title">{{ 'app.tagline' | transloco }}</h1>
+  </div>
+</header>
 
-  @if (routeMissing()) {
-    <p class="notice">{{ 'pick.routeNotFound' | transloco }}</p>
-  }
-  @if (route(); as r) {
-    <p class="route-name">{{ r.routeId }} · {{ r.longRouteName }}</p>
-  }
-</section>
-
-@if (directions().length > 1) {
-  <section class="card">
-    <span class="label">{{ 'pick.directionLabel' | transloco }}</span>
-    <div class="choices">
-      @for (d of directions(); track d.directionId) {
-        <button
-          type="button"
-          class="choice"
-          [class.active]="directionId() === d.directionId"
-          (click)="chooseDirection(d.directionId)"
-        >
-          {{ d.direction }}
-        </button>
-      }
-    </div>
-  </section>
-}
-
-@if (directionId() !== null && !loading()) {
-  <section class="card">
-    <p class="window-note">{{ 'pick.windowNote' | transloco: { from: windowFrom(), to: windowTo() } }}</p>
-    @if (stops().length === 0) {
-      <p class="notice">{{ 'pick.noTripsInWindow' | transloco }}</p>
-    }
-    <label class="field">
-      <span class="label">{{ 'pick.stopLabel' | transloco }}</span>
-      <select (change)="chooseStop($any($event.target).value)">
-        <option value="">{{ 'pick.stopPlaceholder' | transloco }}</option>
-        @for (s of stops(); track s.stopId) {
-          <option [value]="s.stopId">{{ s.stopName }}</option>
+<main class="content">
+  @if (recent.list().length > 0) {
+    <section class="tile">
+      <h2 class="tile-label">{{ 'recent.title' | transloco }}</h2>
+      <ul class="recent-list">
+        @for (r of recent.list(); track r.routeId + r.directionId + r.stopId) {
+          <li>
+            <button type="button" (click)="openRecent(r)">
+              <span><span class="route-chip">{{ r.routeId }}</span> {{ r.routeName }}@if (r.directionName) { · {{ r.directionName }} }</span>
+              <span class="muted">{{ r.stopName }}</span>
+            </button>
+          </li>
         }
-      </select>
+      </ul>
+    </section>
+  }
+
+  <section class="tile">
+    <label class="field">
+      <span class="field-label">{{ 'pick.routeLabel' | transloco }}</span>
+      <span class="row">
+        <input
+          #routeInput
+          class="input"
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          [placeholder]="'pick.routePlaceholder' | transloco"
+          (keydown.enter)="findRoute(routeInput.value)"
+        />
+        <button type="button" class="btn" (click)="findRoute(routeInput.value)">
+          {{ 'pick.find' | transloco }}
+        </button>
+      </span>
     </label>
 
-    @if (stopId() !== null) {
-      <span class="label">{{ 'pick.timesLabel' | transloco }}</span>
-      @if (times().length === 0) {
-        <p class="muted">{{ 'pick.noDepartures' | transloco }}</p>
-      } @else {
-        <ul class="times">
-          @for (t of times(); track t.tripId) {
-            <li>
-              <a [routerLink]="['/trip', t.tripId, 'stop', t.stopSequence]">{{ formatTime(t.departureTime) }}</a>
-            </li>
-          }
-        </ul>
-      }
+    @if (routeMissing()) {
+      <p class="note">{{ 'pick.routeNotFound' | transloco }}</p>
+    }
+    @if (route(); as r) {
+      <p><span class="route-chip">{{ r.routeId }}</span> <strong>{{ r.longRouteName }}</strong></p>
     }
   </section>
-}
 
-@if (loading()) {
-  <p class="muted">{{ 'pick.loading' | transloco }}</p>
-}
-@if (failed()) {
-  <p class="notice">{{ 'pick.error' | transloco }}</p>
-}
+  @if (directions().length > 1) {
+    <section class="tile">
+      <span class="field-label">{{ 'pick.directionLabel' | transloco }}</span>
+      <div class="choices">
+        @for (d of directions(); track d.directionId) {
+          <button
+            type="button"
+            class="choice"
+            [class.active]="directionId() === d.directionId"
+            (click)="chooseDirection(d.directionId)"
+          >
+            {{ d.direction }}
+          </button>
+        }
+      </div>
+    </section>
+  }
+
+  @if (directionId() !== null && !loading()) {
+    <p class="note">{{ 'pick.windowNote' | transloco: { from: windowFrom(), to: windowTo() } }}</p>
+
+    <section class="tile">
+      @if (stops().length === 0) {
+        <p class="note">{{ 'pick.noTripsInWindow' | transloco }}</p>
+      }
+      <label class="field">
+        <span class="field-label">{{ 'pick.stopLabel' | transloco }}</span>
+        <select class="input" (change)="chooseStop($any($event.target).value)">
+          <option value="" [selected]="stopId() === null">{{ 'pick.stopPlaceholder' | transloco }}</option>
+          @for (s of stops(); track s.stopId) {
+            <option [value]="s.stopId" [selected]="s.stopId === stopId()">{{ s.stopName }}</option>
+          }
+        </select>
+      </label>
+
+      @if (stopId() !== null) {
+        <span class="field-label" style="margin: 6px 0 0">{{ 'pick.timesLabel' | transloco }}</span>
+        @if (times().length === 0) {
+          <p class="muted">{{ 'pick.noDepartures' | transloco }}</p>
+        } @else {
+          <ul class="time-grid">
+            @for (t of times(); track t.tripId) {
+              <li>
+                <a
+                  [routerLink]="['/trip', t.tripId, 'stop', t.stopSequence]"
+                  (click)="remember(t)"
+                  [queryParams]="{ route: route()?.routeId, routeName: route()?.longRouteName, stopName: t.stopName, departs: t.departureTime }"
+                >{{ time(t.departureTime) }}</a>
+              </li>
+            }
+          </ul>
+        }
+      }
+    </section>
+  }
+
+  @if (loading()) {
+    <p class="muted">{{ 'pick.loading' | transloco }}</p>
+  }
+  @if (failed()) {
+    <p class="note">{{ 'pick.error' | transloco }}</p>
+  }
+</main>

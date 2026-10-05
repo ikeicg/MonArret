@@ -6,6 +6,8 @@ import { TranslocoPipe } from '@jsverse/transloco';
 import { ApiService } from '../core/api.service';
 import { formatInstant, formatLocalDeparture } from '../core/format';
 import { LanguageService } from '../core/language';
+import { RecentStop, RecentStops } from '../core/recent-stops';
+import { BrandBar } from '../shared/brand-bar';
 import { Departure, Direction, Route } from '../core/models';
 
 interface StopOption {
@@ -15,13 +17,14 @@ interface StopOption {
 
 @Component({
   selector: 'app-pick-page',
-  imports: [RouterLink, TranslocoPipe],
+  imports: [RouterLink, TranslocoPipe, BrandBar],
   templateUrl: './pick-page.html',
 })
 export class PickPage {
   private readonly api = inject(ApiService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly language = inject(LanguageService);
+  protected readonly recent = inject(RecentStops);
 
   protected readonly route = signal<Route | null>(null);
   protected readonly routeMissing = signal(false);
@@ -31,8 +34,6 @@ export class PickPage {
   protected readonly stopId = signal<string | null>(null);
   protected readonly loading = signal(false);
   protected readonly failed = signal(false);
-
-  protected readonly formatTime = formatLocalDeparture;
 
   // When the departures were fetched; the list covers the hour from then.
   private readonly fetchedAt = signal<Date | null>(null);
@@ -59,6 +60,10 @@ export class PickPage {
       .sort((a, b) => a.departureTime.localeCompare(b.departureTime)),
   );
 
+  protected time(localDateTime: string): string {
+    return formatLocalDeparture(localDateTime, this.language.current);
+  }
+
   protected findRoute(value: string): void {
     const routeId = value.trim();
     if (!routeId) return;
@@ -82,7 +87,34 @@ export class PickPage {
       });
   }
 
-  protected chooseDirection(directionId: number): void {
+  // Restores the route, direction and stop; the rider then picks a departure.
+  protected openRecent(recent: RecentStop): void {
+    this.reset();
+    this.route.set({ routeId: recent.routeId, longRouteName: recent.routeName });
+    this.api
+      .directions(recent.routeId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (response) => this.directions.set(response.data ?? []), error: () => this.fail() });
+    this.chooseDirection(recent.directionId, recent.stopId);
+  }
+
+  // Called when a departure is opened, so the same route and stop is one tap away next time.
+  protected remember(departure: Departure): void {
+    const route = this.route();
+    const directionId = this.directionId();
+    if (!route || directionId === null) return;
+
+    this.recent.add({
+      routeId: route.routeId,
+      routeName: route.longRouteName,
+      directionId,
+      directionName: this.directions().find((d) => d.directionId === directionId)?.direction ?? '',
+      stopId: departure.stopId,
+      stopName: departure.stopName,
+    });
+  }
+
+  protected chooseDirection(directionId: number, selectStopId?: string): void {
     const route = this.route();
     if (!route) return;
 
@@ -97,6 +129,9 @@ export class PickPage {
         next: (response) => {
           this.fetchedAt.set(new Date());
           this.departures.set(response.data ?? []);
+          if (selectStopId && this.stops().some((s) => s.stopId === selectStopId)) {
+            this.stopId.set(selectStopId);
+          }
           this.loading.set(false);
         },
         error: () => this.fail(),

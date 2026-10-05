@@ -29,9 +29,11 @@
   "trip": {
     "back": "Choisir un autre trajet",
     "loading": "Chargement du trajet…",
-    "refreshed": "Actualisé à {{time}}",
     "refreshError": "Actualisation impossible. Dernière mise à jour affichée.",
-    "failed": "Impossible de charger ce trajet."
+    "failed": "Impossible de charger ce trajet.",
+    "updatedAgo": "Mis à jour il y a {{n}} s",
+    "nextIn": "Prochaine mise à jour dans {{n}} s",
+    "updating": "Mise à jour…"
   },
   "headline": {
     "LIVE_DATA_UNAVAILABLE": "Les données en direct sont temporairement indisponibles",
@@ -43,7 +45,8 @@
     "NOT_TRACKED_YET": "Pas encore suivi",
     "STARTED_LATE": "Le départ est en retard, aucun autobus en direct pour l'instant",
     "NO_LIVE_BUS_FOUND": "Aucun autobus en direct trouvé",
-    "NO_LIVE_INFO": "Aucune information en direct pour ce trajet"
+    "NO_LIVE_INFO": "Aucune information en direct pour ce trajet",
+    "LABEL": "Statut du trajet"
   },
   "stop": {
     "title": "Votre arrêt",
@@ -55,15 +58,16 @@
   "progress": {
     "title": "Progression de l'autobus",
     "NONE": "Aucun autobus en direct à suivre",
-    "BEFORE_STOP_one": "À 1 arrêt, en direction de {{name}}",
-    "BEFORE_STOP_other": "À {{count}} arrêts, en direction de {{name}}",
     "AT_STOP": "L'autobus est à votre arrêt",
     "PASSED": "Votre arrêt est déjà passé",
     "MAY_HAVE_PASSED": "Votre arrêt est peut-être déjà passé",
     "UNKNOWN": "Impossible de situer l'autobus par rapport à votre arrêt pour l'instant",
     "MOVING": "L'autobus est en mouvement",
     "STATIONARY": "L'autobus n'a pas bougé récemment",
-    "MOVEMENT_UNKNOWN": "Pas assez de données de position pour savoir si l'autobus bouge"
+    "MOVEMENT_UNKNOWN": "Pas assez de données de position pour savoir si l'autobus bouge",
+    "STOP_AWAY_one": "arrêt à parcourir",
+    "STOP_AWAY_other": "arrêts à parcourir",
+    "HEADING_TO": "En direction de {{name}}"
   },
   "timing": {
     "title": "Horaire",
@@ -96,5 +100,8 @@
     "NO_DATA_AVAILABLE": "L'autobus ne signale aucune information d'affluence",
     "NOT_BOARDABLE": "Embarquement impossible",
     "UNKNOWN": "Aucune information d'affluence"
+  },
+  "recent": {
+    "title": "Arrêts récents"
   }
 }
