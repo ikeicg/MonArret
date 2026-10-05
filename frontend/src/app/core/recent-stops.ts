@@ -11,7 +11,7 @@ export interface RecentStop {
 }
 
 const STORAGE_KEY = 'csm.recent-stops';
-const MAX_STOPS = 5;
+const MAX_STOPS = 3;
 
 @Injectable({ providedIn: 'root' })
 export class RecentStops {

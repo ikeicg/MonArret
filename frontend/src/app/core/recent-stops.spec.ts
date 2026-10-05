@@ -36,12 +36,11 @@ describe('RecentStops', () => {
     expect(recent.list()).toHaveLength(2);
   });
 
-  it('keeps at most five stops', () => {
+  it('keeps the three most recent stops and discards the oldest', () => {
     const recent = create();
-    for (let i = 0; i < 7; i++) recent.add(stop(`s${i}`));
+    for (let i = 0; i < 5; i++) recent.add(stop(`s${i}`));
 
-    expect(recent.list()).toHaveLength(5);
-    expect(recent.list()[0].stopId).toBe('s6');
+    expect(recent.list().map((s) => s.stopId)).toEqual(['s4', 's3', 's2']);
   });
 
   it('survives a reload and never expires', () => {
