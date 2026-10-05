@@ -29,11 +29,13 @@
   "trip": {
     "back": "Choose another trip",
     "loading": "Loading trip…",
-    "refreshError": "Could not refresh. Showing the last update.",
     "failed": "Could not load this trip.",
     "updatedAgo": "Updated {{n}} s ago",
     "nextIn": "Next update in {{n}} s",
-    "updating": "Updating…"
+    "updating": "Updating…",
+    "paused": "Updates paused",
+    "finished": "Trip finished. Updates stopped.",
+    "retryIn": "Could not refresh. Retrying in {{n}} s"
   },
   "headline": {
     "LIVE_DATA_UNAVAILABLE": "Live data is temporarily unavailable",
@@ -103,5 +105,8 @@
   },
   "recent": {
     "title": "Recent stops"
+  },
+  "net": {
+    "offline": "No internet connection. Updates are paused until it is back."
   }
 }

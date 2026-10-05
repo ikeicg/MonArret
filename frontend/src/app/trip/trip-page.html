@@ -35,8 +35,12 @@
         <div class="strip-row">
           <span>{{ 'trip.updatedAgo' | transloco: { n: secondsSinceRefresh() } }}</span>
           <span>
-            @if (state().failed) {
-              {{ 'trip.refreshError' | transloco }}
+            @if (finished()) {
+              {{ 'trip.finished' | transloco }}
+            } @else if (!online()) {
+              {{ 'trip.paused' | transloco }}
+            } @else if (state().failed) {
+              {{ 'trip.retryIn' | transloco: { n: secondsToRetry() } }}
             } @else if ((secondsToRefresh() ?? 0) > 0) {
               {{ 'trip.nextIn' | transloco: { n: secondsToRefresh() } }}
             } @else {

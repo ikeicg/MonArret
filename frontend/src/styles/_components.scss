@@ -424,3 +424,16 @@
   background: var(--banner-fg);
   color: var(--banner-bg);
 }
+
+// Shown above every page while the browser has no connection
+.offline-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-text);
+  color: var(--color-on-solid);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-align: center;
+}

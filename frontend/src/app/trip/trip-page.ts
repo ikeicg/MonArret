@@ -8,7 +8,7 @@ import { ApiService } from '../core/api.service';
 import { crowdingLevel, describeDelay, formatInstant, formatLocalDeparture } from '../core/format';
 import { LanguageService } from '../core/language';
 import { HeadlineStatus, TripHealth } from '../core/models';
-import { POLL_INTERVAL_MS, poll } from '../core/poll';
+import { POLL_INTERVAL_MS, online$, poll } from '../core/poll';
 import { BrandBar } from '../shared/brand-bar';
 
 interface TripState {
@@ -16,9 +16,11 @@ interface TripState {
   // The latest refresh failed; health, if any, is from an earlier one.
   failed: boolean;
   refreshedAt: number | null;
+  // When the next attempt after a failed refresh is due.
+  retryAt: number | null;
 }
 
-const INITIAL: TripState = { health: null, failed: false, refreshedAt: null };
+const INITIAL: TripState = { health: null, failed: false, refreshedAt: null, retryAt: null };
 const REFRESH_SECONDS = POLL_INTERVAL_MS / 1000;
 
 @Component({
@@ -43,14 +45,15 @@ export class TripPage {
   protected readonly state = toSignal(
     toObservable(computed(() => ({ tripId: this.tripId(), stopSequence: Number(this.stopSequence()) }))).pipe(
       switchMap(({ tripId, stopSequence }) =>
-        poll(() => this.api.tripHealth(tripId, stopSequence).pipe(map((response) => response.data))).pipe(
-          scan(
-            (state, result): TripState =>
-              result.ok && result.value
-                ? { health: result.value, failed: false, refreshedAt: Date.now() }
-                : { ...state, failed: true },
-            INITIAL,
-          ),
+        poll(() => this.api.tripHealth(tripId, stopSequence).pipe(map((response) => response.data)), {
+          stopWhen: (health) => health?.headline.status === 'TRIP_FINISHED',
+        }).pipe(
+          scan((state, result): TripState => {
+            if (result.ok && result.value) {
+              return { health: result.value, failed: false, refreshedAt: Date.now(), retryAt: null };
+            }
+            return { ...state, failed: true, retryAt: result.ok ? null : Date.now() + result.retryInMs };
+          }, INITIAL),
         ),
       ),
     ),
@@ -59,6 +62,15 @@ export class TripPage {
 
   private readonly now = toSignal(interval(1000).pipe(startWith(0), map(() => Date.now())), {
     initialValue: Date.now(),
+  });
+
+  protected readonly online = toSignal(online$(), { initialValue: navigator.onLine });
+
+  protected readonly finished = computed(() => this.state().health?.headline.status === 'TRIP_FINISHED');
+
+  protected readonly secondsToRetry = computed(() => {
+    const at = this.state().retryAt;
+    return at === null ? null : Math.max(0, Math.ceil((at - this.now()) / 1000));
   });
 
   protected readonly secondsSinceRefresh = computed(() => {

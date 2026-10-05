@@ -29,11 +29,13 @@
   "trip": {
     "back": "Choisir un autre trajet",
     "loading": "Chargement du trajet…",
-    "refreshError": "Actualisation impossible. Dernière mise à jour affichée.",
     "failed": "Impossible de charger ce trajet.",
     "updatedAgo": "Mis à jour il y a {{n}} s",
     "nextIn": "Prochaine mise à jour dans {{n}} s",
-    "updating": "Mise à jour…"
+    "updating": "Mise à jour…",
+    "paused": "Mises à jour suspendues",
+    "finished": "Trajet terminé. Mises à jour arrêtées.",
+    "retryIn": "Actualisation impossible. Nouvel essai dans {{n}} s"
   },
   "headline": {
     "LIVE_DATA_UNAVAILABLE": "Les données en direct sont temporairement indisponibles",
@@ -103,5 +105,8 @@
   },
   "recent": {
     "title": "Arrêts récents"
+  },
+  "net": {
+    "offline": "Pas de connexion Internet. Les mises à jour sont suspendues jusqu'à son retour."
   }
 }
