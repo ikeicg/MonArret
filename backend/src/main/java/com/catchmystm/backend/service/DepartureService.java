@@ -13,7 +13,9 @@ import org.springframework.stereotype.Service;
 import com.catchmystm.backend.dto.StopTimeDto;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DepartureService {
@@ -26,7 +28,7 @@ public class DepartureService {
             Integer directionId,
             String todayAsString) {
 
-    	System.out.println("Cache miss");
+        log.debug("Departures cache miss: route {}, direction {}, {}", routeId, directionId, todayAsString);
         LocalDate today = LocalDate.parse(todayAsString);
 
         String sql = """

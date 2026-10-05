@@ -119,7 +119,7 @@ public class LiveStateEngine {
 
 		LocalDate serviceDate = parseServiceDate(trip);
 		if (serviceDate == null) {
-			log.warn("Skipping trip update for {}: missing or invalid start_date", tripId);
+			log.debug("Skipping trip update for {}: missing or invalid start_date", tripId);
 			return;
 		}
 
@@ -242,7 +242,7 @@ public class LiveStateEngine {
 
 		LocalDate serviceDate = parseServiceDate(vehicle.getTrip());
 		if (serviceDate == null) {
-			log.warn("Skipping vehicle position for {}: missing or invalid start_date", tripId);
+			log.debug("Skipping vehicle position for {}: missing or invalid start_date", tripId);
 			return;
 		}
 
