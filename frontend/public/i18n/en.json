@@ -1,0 +1,100 @@
+{
+  "app": {
+    "title": "CatchMySTM",
+    "tagline": "How is your bus doing?"
+  },
+  "lang": {
+    "label": "Language",
+    "en": "English",
+    "fr": "Français"
+  },
+  "common": {
+    "notAvailable": "Not available"
+  },
+  "pick": {
+    "routeLabel": "Bus route",
+    "routePlaceholder": "e.g. 24",
+    "find": "Find route",
+    "routeNotFound": "No bus route found with that number.",
+    "directionLabel": "Direction",
+    "stopLabel": "Stop with a departure in this window",
+    "stopPlaceholder": "Choose a stop",
+    "windowNote": "Only trips leaving between {{from}} and {{to}} are listed. A stop or time that is missing may still run later.",
+    "noTripsInWindow": "No trips leave in this window for this direction. Try again later.",
+    "timesLabel": "Departures from this stop in this window",
+    "noDepartures": "No departures from this stop in this window.",
+    "loading": "Loading…",
+    "error": "Something went wrong. Please try again."
+  },
+  "trip": {
+    "back": "Choose another trip",
+    "loading": "Loading trip…",
+    "refreshed": "Refreshed {{time}}",
+    "refreshError": "Could not refresh. Showing the last update.",
+    "failed": "Could not load this trip."
+  },
+  "headline": {
+    "LIVE_DATA_UNAVAILABLE": "Live data is temporarily unavailable",
+    "CANCELLED": "This trip is cancelled",
+    "TRIP_FINISHED": "This trip has finished",
+    "SIGNAL_LOST": "The bus signal was lost",
+    "LIVE": "Live",
+    "LIVE_AGE": "Position updated {{seconds}} s ago",
+    "NOT_TRACKED_YET": "Not tracked yet",
+    "STARTED_LATE": "Departure is late, no live bus yet",
+    "NO_LIVE_BUS_FOUND": "No live bus found",
+    "NO_LIVE_INFO": "No live information for this trip"
+  },
+  "stop": {
+    "title": "Your stop",
+    "SKIPPED": "This trip skips your stop",
+    "NO_LIVE_INFO": "No live information for your stop",
+    "SCHEDULED": "Your stop is on this trip's schedule",
+    "UNKNOWN": "The feed has not said anything about your stop yet"
+  },
+  "progress": {
+    "title": "Bus progress",
+    "NONE": "No live bus to track",
+    "BEFORE_STOP_one": "1 stop away, heading to {{name}}",
+    "BEFORE_STOP_other": "{{count}} stops away, heading to {{name}}",
+    "AT_STOP": "The bus is at your stop",
+    "PASSED": "Already passed your stop",
+    "MAY_HAVE_PASSED": "May have passed your stop",
+    "UNKNOWN": "Cannot tell where the bus is relative to your stop yet",
+    "MOVING": "The bus is moving",
+    "STATIONARY": "The bus has not moved recently",
+    "MOVEMENT_UNKNOWN": "Not enough position data to tell if the bus is moving"
+  },
+  "timing": {
+    "title": "Timing",
+    "scheduled": "Scheduled",
+    "predicted": "STM prediction",
+    "onTime": "On time",
+    "late": "{{n}} min late",
+    "early": "{{n}} min early",
+    "estimate": "Estimate, may still change",
+    "NO_PREDICTION": "No prediction available",
+    "NONE": "No prediction without a live bus",
+    "PASSED": "Not shown once the bus has passed your stop"
+  },
+  "route": {
+    "title": "Route",
+    "ON_ROUTE": "Following its scheduled route",
+    "NOT_ON_ROUTE": "This bus isn't following its scheduled route",
+    "UNKNOWN": "Not enough position data to tell yet"
+  },
+  "crowding": {
+    "title": "How full",
+    "NONE": "No live bus",
+    "EMPTY": "Empty",
+    "MANY_SEATS_AVAILABLE": "Many seats available",
+    "FEW_SEATS_AVAILABLE": "Few seats available",
+    "STANDING_ROOM_ONLY": "Standing room only",
+    "CRUSHED_STANDING_ROOM_ONLY": "Crowded, standing room only",
+    "FULL": "Full",
+    "NOT_ACCEPTING_PASSENGERS": "Not accepting passengers",
+    "NO_DATA_AVAILABLE": "The bus reports no crowding information",
+    "NOT_BOARDABLE": "Not boardable",
+    "UNKNOWN": "No crowding information"
+  }
+}

@@ -1,0 +1,113 @@
+<a class="back" routerLink="/">← {{ 'trip.back' | transloco }}</a>
+
+@if (state().health; as h) {
+  <section class="card headline" [attr.data-tone]="tone(h.headline.status)">
+    <h1>{{ 'headline.' + h.headline.status | transloco }}</h1>
+    @if (h.headline.status === 'LIVE' && h.headline.positionAgeSeconds !== null) {
+      <p>{{ 'headline.LIVE_AGE' | transloco: { seconds: h.headline.positionAgeSeconds } }}</p>
+    }
+  </section>
+
+  <section class="card">
+    <h2>{{ 'stop.title' | transloco }}</h2>
+    @if (h.stopStatus; as s) {
+      <p [class.alert]="s === 'SKIPPED'" [class.muted]="s !== 'SKIPPED'">{{ 'stop.' + s | transloco }}</p>
+    } @else {
+      <p class="muted">{{ 'common.notAvailable' | transloco }}</p>
+    }
+  </section>
+
+  <section class="card">
+    <h2>{{ 'progress.title' | transloco }}</h2>
+    @if (h.progress; as p) {
+      @if (p.state === 'BEFORE_STOP') {
+        <p>
+          {{
+            (p.stopsAway === 1 ? 'progress.BEFORE_STOP_one' : 'progress.BEFORE_STOP_other')
+              | transloco: { count: p.stopsAway, name: p.nextStopName }
+          }}
+        </p>
+      } @else {
+        <p [class.muted]="p.state === 'UNKNOWN'">{{ 'progress.' + p.state | transloco }}</p>
+      }
+      <p class="muted">
+        {{ (p.movement === 'UNKNOWN' ? 'progress.MOVEMENT_UNKNOWN' : 'progress.' + p.movement) | transloco }}
+      </p>
+    } @else {
+      <p class="muted">{{ 'progress.NONE' | transloco }}</p>
+    }
+  </section>
+
+  <section class="card">
+    <h2>{{ 'timing.title' | transloco }}</h2>
+    @if (h.timing; as t) {
+      <dl class="times-grid">
+        <dt>{{ 'timing.scheduled' | transloco }}</dt>
+        <dd>{{ time(t.scheduled) }}</dd>
+        @if (t.predicted !== null) {
+          <dt>{{ 'timing.predicted' | transloco }}</dt>
+          <dd>{{ time(t.predicted) }}</dd>
+        }
+      </dl>
+      @if (t.differenceSeconds !== null) {
+        @let d = delay(t.differenceSeconds);
+        <p [class.alert]="t.status === 'LATE' || t.status === 'EARLY'">
+          {{ 'timing.' + d.kind | transloco: { n: d.minutes } }}
+        </p>
+      } @else {
+        <p class="muted">{{ 'timing.NO_PREDICTION' | transloco }}</p>
+      }
+      @if (t.estimate) {
+        <p class="muted">{{ 'timing.estimate' | transloco }}</p>
+      }
+    } @else if (h.progress?.state === 'PASSED') {
+      <p class="muted">{{ 'timing.PASSED' | transloco }}</p>
+    } @else {
+      <p class="muted">{{ 'timing.NONE' | transloco }}</p>
+    }
+  </section>
+
+  <section class="card">
+    <h2>{{ 'route.title' | transloco }}</h2>
+    @if (h.routeStatus; as r) {
+      <p [class.alert]="r === 'NOT_ON_ROUTE'" [class.muted]="r === 'UNKNOWN'">{{ 'route.' + r | transloco }}</p>
+    } @else {
+      <p class="muted">{{ 'common.notAvailable' | transloco }}</p>
+    }
+  </section>
+
+  <section class="card">
+    <h2>{{ 'crowding.title' | transloco }}</h2>
+    @if (h.crowding; as c) {
+      @if (crowding(c) > 0) {
+        <p class="crowding">
+          <span class="pips" aria-hidden="true">
+            @for (n of [1, 2, 3]; track n) {
+              <span class="pip" [class.on]="n <= crowding(c)"></span>
+            }
+          </span>
+          {{ 'crowding.' + c | transloco }}
+        </p>
+      } @else {
+        <p [class.alert]="c === 'NOT_ACCEPTING_PASSENGERS' || c === 'NOT_BOARDABLE'" [class.muted]="c === 'UNKNOWN' || c === 'NO_DATA_AVAILABLE'">
+          {{ 'crowding.' + c | transloco }}
+        </p>
+      }
+    } @else {
+      <p class="muted">{{ 'crowding.NONE' | transloco }}</p>
+    }
+  </section>
+
+  <p class="footnote">
+    @if (refreshed(); as r) {
+      {{ 'trip.refreshed' | transloco: { time: r } }}
+    }
+    @if (state().failed) {
+      <span class="alert-inline"> · {{ 'trip.refreshError' | transloco }}</span>
+    }
+  </p>
+} @else if (state().failed) {
+  <p class="notice">{{ 'trip.failed' | transloco }}</p>
+} @else {
+  <p class="muted">{{ 'trip.loading' | transloco }}</p>
+}

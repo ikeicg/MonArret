@@ -1,3 +1,10 @@
 import { Routes } from '@angular/router';
 
-export const routes: Routes = [];
+import { PickPage } from './pick/pick-page';
+import { TripPage } from './trip/trip-page';
+
+export const routes: Routes = [
+  { path: '', component: PickPage },
+  { path: 'trip/:tripId/stop/:stopSequence', component: TripPage },
+  { path: '**', redirectTo: '' },
+];

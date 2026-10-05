@@ -1,0 +1,100 @@
+{
+  "app": {
+    "title": "CatchMySTM",
+    "tagline": "Comment va votre autobus?"
+  },
+  "lang": {
+    "label": "Langue",
+    "en": "English",
+    "fr": "Français"
+  },
+  "common": {
+    "notAvailable": "Non disponible"
+  },
+  "pick": {
+    "routeLabel": "Ligne d'autobus",
+    "routePlaceholder": "p. ex. 24",
+    "find": "Chercher la ligne",
+    "routeNotFound": "Aucune ligne d'autobus trouvée avec ce numéro.",
+    "directionLabel": "Direction",
+    "stopLabel": "Arrêt avec un départ dans cette plage",
+    "stopPlaceholder": "Choisir un arrêt",
+    "windowNote": "Seuls les trajets qui partent entre {{from}} et {{to}} sont listés. Un arrêt ou une heure absent peut quand même avoir un passage plus tard.",
+    "noTripsInWindow": "Aucun trajet ne part dans cette plage pour cette direction. Réessayez plus tard.",
+    "timesLabel": "Départs de cet arrêt dans cette plage",
+    "noDepartures": "Aucun départ de cet arrêt dans cette plage.",
+    "loading": "Chargement…",
+    "error": "Une erreur est survenue. Veuillez réessayer."
+  },
+  "trip": {
+    "back": "Choisir un autre trajet",
+    "loading": "Chargement du trajet…",
+    "refreshed": "Actualisé à {{time}}",
+    "refreshError": "Actualisation impossible. Dernière mise à jour affichée.",
+    "failed": "Impossible de charger ce trajet."
+  },
+  "headline": {
+    "LIVE_DATA_UNAVAILABLE": "Les données en direct sont temporairement indisponibles",
+    "CANCELLED": "Ce trajet est annulé",
+    "TRIP_FINISHED": "Ce trajet est terminé",
+    "SIGNAL_LOST": "Le signal de l'autobus a été perdu",
+    "LIVE": "En direct",
+    "LIVE_AGE": "Position mise à jour il y a {{seconds}} s",
+    "NOT_TRACKED_YET": "Pas encore suivi",
+    "STARTED_LATE": "Le départ est en retard, aucun autobus en direct pour l'instant",
+    "NO_LIVE_BUS_FOUND": "Aucun autobus en direct trouvé",
+    "NO_LIVE_INFO": "Aucune information en direct pour ce trajet"
+  },
+  "stop": {
+    "title": "Votre arrêt",
+    "SKIPPED": "Ce trajet ne dessert pas votre arrêt",
+    "NO_LIVE_INFO": "Aucune information en direct pour votre arrêt",
+    "SCHEDULED": "Votre arrêt figure à l'horaire de ce trajet",
+    "UNKNOWN": "Le flux n'a encore rien indiqué au sujet de votre arrêt"
+  },
+  "progress": {
+    "title": "Progression de l'autobus",
+    "NONE": "Aucun autobus en direct à suivre",
+    "BEFORE_STOP_one": "À 1 arrêt, en direction de {{name}}",
+    "BEFORE_STOP_other": "À {{count}} arrêts, en direction de {{name}}",
+    "AT_STOP": "L'autobus est à votre arrêt",
+    "PASSED": "Votre arrêt est déjà passé",
+    "MAY_HAVE_PASSED": "Votre arrêt est peut-être déjà passé",
+    "UNKNOWN": "Impossible de situer l'autobus par rapport à votre arrêt pour l'instant",
+    "MOVING": "L'autobus est en mouvement",
+    "STATIONARY": "L'autobus n'a pas bougé récemment",
+    "MOVEMENT_UNKNOWN": "Pas assez de données de position pour savoir si l'autobus bouge"
+  },
+  "timing": {
+    "title": "Horaire",
+    "scheduled": "Prévu",
+    "predicted": "Prévision de la STM",
+    "onTime": "À l'heure",
+    "late": "{{n}} min de retard",
+    "early": "{{n}} min d'avance",
+    "estimate": "Estimation, peut encore changer",
+    "NO_PREDICTION": "Aucune prévision disponible",
+    "NONE": "Aucune prévision sans autobus en direct",
+    "PASSED": "Non affiché une fois l'autobus passé à votre arrêt"
+  },
+  "route": {
+    "title": "Parcours",
+    "ON_ROUTE": "Suit son parcours prévu",
+    "NOT_ON_ROUTE": "Cet autobus ne suit pas son parcours prévu",
+    "UNKNOWN": "Pas assez de données de position pour le savoir"
+  },
+  "crowding": {
+    "title": "Affluence",
+    "NONE": "Aucun autobus en direct",
+    "EMPTY": "Vide",
+    "MANY_SEATS_AVAILABLE": "Beaucoup de places assises",
+    "FEW_SEATS_AVAILABLE": "Peu de places assises",
+    "STANDING_ROOM_ONLY": "Places debout seulement",
+    "CRUSHED_STANDING_ROOM_ONLY": "Bondé, places debout seulement",
+    "FULL": "Complet",
+    "NOT_ACCEPTING_PASSENGERS": "N'accepte pas de passagers",
+    "NO_DATA_AVAILABLE": "L'autobus ne signale aucune information d'affluence",
+    "NOT_BOARDABLE": "Embarquement impossible",
+    "UNKNOWN": "Aucune information d'affluence"
+  }
+}
