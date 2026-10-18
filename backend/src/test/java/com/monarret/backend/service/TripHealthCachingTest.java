@@ -8,6 +8,13 @@ import static org.mockito.Mockito.when;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -89,5 +96,31 @@ class TripHealthCachingTest {
 		service.getTripHealth("cache-3", 4, "v1");
 
 		verify(store, times(2)).snapshotTrip("cache-3");
+	}
+
+	@Test
+	void manyRequestsForTheSameMissingEntry_buildItOnlyOnce() throws Exception {
+		int requests = 20;
+		when(store.snapshotTrip("cache-stampede")).thenAnswer(call -> {
+			Thread.sleep(200);
+			return Optional.empty();
+		});
+		ExecutorService pool = Executors.newFixedThreadPool(requests);
+		CountDownLatch go = new CountDownLatch(1);
+		List<Future<?>> calls = new ArrayList<>();
+		for (int i = 0; i < requests; i++) {
+			calls.add(pool.submit(() -> {
+				go.await();
+				return service.getTripHealth("cache-stampede", 4, "v1");
+			}));
+		}
+
+		go.countDown();
+		for (Future<?> call : calls) {
+			call.get();
+		}
+		pool.shutdown();
+
+		verify(store, times(1)).snapshotTrip("cache-stampede");
 	}
 }

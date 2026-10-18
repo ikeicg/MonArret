@@ -74,17 +74,18 @@ public class StmPoller {
 
     // One loop per feed, so a failing feed cannot cancel or delay the other.
     private void poll(String endpoint, Sinks.Many<FeedMessage> sink, Consumer<Instant> markReceived) {
-        polling.add(pollingLoop(endpoint, transitFeedPollInterval).subscribe(feed -> {
+        polling.add(pollingLoop(endpoint, transitFeedPollInterval, feed -> {
             sink.tryEmitNext(feed);
             markReceived.accept(Instant.now());
-        }));
+        }).subscribe());
     }
 
     // At most one fetch at a time: a tick that arrives while the previous fetch is still running is skipped.
-    Flux<FeedMessage> pollingLoop(String endpoint, Duration interval) {
+    Flux<FeedMessage> pollingLoop(String endpoint, Duration interval, Consumer<FeedMessage> onMessage) {
         return selfHealing(endpoint, () -> Flux.interval(Duration.ZERO, interval)
                 .onBackpressureDrop(tick -> log.warn("Skipping a poll of {}: the previous one is still running", endpoint))
-                .flatMap(tick -> fetchGtfsFeed(endpoint), 1));
+                .flatMap(tick -> fetchGtfsFeed(endpoint), 1)
+                .doOnNext(onMessage));
     }
 
     // Failed fetches are already absorbed in fetchGtfsFeed. This restarts the loop if the stream itself ever errors.

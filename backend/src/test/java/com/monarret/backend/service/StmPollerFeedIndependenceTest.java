@@ -96,7 +96,7 @@ class StmPollerFeedIndependenceTest {
 		});
 
 		// ticks every 2 s, each fetch takes 5 s: fetches start at 0 s, 6 s and 12 s instead of at every tick
-		StepVerifier.withVirtualTime(() -> poller.pollingLoop("/tripUpdates", Duration.ofSeconds(2)))
+		StepVerifier.withVirtualTime(() -> poller.pollingLoop("/tripUpdates", Duration.ofSeconds(2), message -> { }))
 				.expectSubscription()
 				.thenAwait(Duration.ofSeconds(5))
 				.expectNextCount(1)
@@ -123,5 +123,24 @@ class StmPollerFeedIndependenceTest {
 				.verify(Duration.ofSeconds(3));
 
 		assertThat(attempts).hasValue(3);
+	}
+
+	@Test
+	void whenHandlingAMessageFails_theLoopRestartsAndDeliversTheNextOne() {
+		AtomicInteger handled = new AtomicInteger();
+		StmPoller poller = newPoller(request -> Mono.just(validFeed()));
+
+		StepVerifier.withVirtualTime(() -> poller.pollingLoop("/tripUpdates", Duration.ofSeconds(20), message -> {
+					if (handled.incrementAndGet() == 1) {
+						throw new IllegalStateException("handler failed");
+					}
+				}))
+				.expectSubscription()
+				.thenAwait(Duration.ofSeconds(30))
+				.expectNextCount(1)
+				.thenCancel()
+				.verify(Duration.ofSeconds(3));
+
+		assertThat(handled.get()).isGreaterThanOrEqualTo(2);
 	}
 }

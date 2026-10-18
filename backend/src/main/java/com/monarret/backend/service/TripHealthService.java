@@ -30,7 +30,7 @@ public class TripHealthService {
     }
 
     // The version is an argument, not read here, so the cache key and the ETag come from the same value.
-    @Cacheable(cacheManager = HealthCacheConfiguration.MANAGER, cacheNames = HealthCacheConfiguration.TRIP_HEALTH_CACHE,
+    @Cacheable(cacheManager = HealthCacheConfiguration.MANAGER, cacheNames = HealthCacheConfiguration.TRIP_HEALTH_CACHE, sync = true,
             key = "#tripId + ':' + #stopSequence + ':' + #version")
     public TripHealth getTripHealth(String tripId, int stopSequence, String version) {
         FeedHealth feedHealth = poller.getFeedHealth();
