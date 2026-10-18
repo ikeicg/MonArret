@@ -25,7 +25,8 @@ public class HealthCacheConfiguration {
         CaffeineCacheManager manager = new CaffeineCacheManager(TRIP_HEALTH_CACHE);
         manager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(EXPIRE_AFTER_WRITE)
-                .maximumSize(MAX_ENTRIES));
+                .maximumSize(MAX_ENTRIES)
+                .recordStats());
         return manager;
     }
 }

@@ -6,8 +6,10 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicLong;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.proj4j.ProjCoordinate;
@@ -25,6 +27,8 @@ import com.google.transit.realtime.GtfsRealtime.TripUpdate;
 import com.google.transit.realtime.GtfsRealtime.VehiclePosition;
 
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.Disposable;
+import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
@@ -40,6 +44,8 @@ public class LiveStateEngine {
 	private final Clock montrealClock;
 	private final IngestMetrics tripUpdatesMetrics;
 	private final IngestMetrics vehiclePositionsMetrics;
+	private final Counter tripUpdatesDropped;
+	private final Counter vehiclePositionsDropped;
 
 	private final AtomicLong lastTripUpdatesHeaderTimestamp = new AtomicLong(-1);
 	private final AtomicLong lastVehiclePositionsHeaderTimestamp = new AtomicLong(-1);
@@ -58,26 +64,41 @@ public class LiveStateEngine {
 		this.montrealClock = montrealClock;
 		this.tripUpdatesMetrics = new IngestMetrics("tripUpdates", "trip update", meterRegistry);
 		this.vehiclePositionsMetrics = new IngestMetrics("vehiclePositions", "vehicle position", meterRegistry);
+		this.tripUpdatesDropped = droppedCounter(meterRegistry, "tripUpdates");
+		this.vehiclePositionsDropped = droppedCounter(meterRegistry, "vehiclePositions");
 	}
 
 	@EventListener(ApplicationReadyEvent.class)
 	private void start() {
-
-		tripUpdatesFeed
-			.publishOn(Schedulers.boundedElastic())
-			.subscribe(feedMessage -> {
-				handleTripUpdates(feedMessage);
-			});
-
-		vehiclePositionsFeed
-			.publishOn(Schedulers.boundedElastic())
-			.subscribe(feedMessage -> {
-				handleVehiclePositions(feedMessage);
-			});
-
+		subscribeTo(tripUpdatesFeed, "trip updates", tripUpdatesDropped, this::handleTripUpdates);
+		subscribeTo(vehiclePositionsFeed, "vehicle positions", vehiclePositionsDropped, this::handleVehiclePositions);
 	}
 
-	
+	// If ingestion falls behind, only the newest message waits; older ones are counted and skipped.
+	// A failure while ingesting one message is logged and does not end the subscription.
+	Disposable subscribeTo(Flux<FeedMessage> feed, String name, Counter dropped, Consumer<FeedMessage> handler) {
+		return latestWins(feed, dropped::increment)
+			.publishOn(Schedulers.boundedElastic(), 1)
+			.subscribe(message -> {
+				try {
+					handler.accept(message);
+				} catch (Exception e) {
+					log.error("Failed to ingest a {} message: {}", name, e.toString());
+				}
+			});
+	}
+
+	static <T> Flux<T> latestWins(Flux<T> source, Runnable onDropped) {
+		return source.onBackpressureBuffer(1, dropped -> onDropped.run(), BufferOverflowStrategy.DROP_OLDEST);
+	}
+
+	private static Counter droppedCounter(MeterRegistry registry, String feed) {
+		return Counter.builder("feed.dropped")
+			.description("Feed messages skipped because ingestion was still busy with an earlier one")
+			.tag("feed", feed)
+			.register(registry);
+	}
+
 	// A repeated or older header timestamp is skipped. A message without one is never skipped.
 	private static boolean isRepeatedMessage(FeedMessage feed, AtomicLong newestHeaderTimestamp) {
 		if (!feed.getHeader().hasTimestamp()) return false;

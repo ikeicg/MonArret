@@ -2,6 +2,10 @@ package com.monarret.backend.service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+import jakarta.annotation.PreDestroy;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -14,9 +18,12 @@ import org.springframework.web.reactive.function.client.WebClient;
 import com.google.transit.realtime.GtfsRealtime.FeedMessage;
 
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.Disposable;
+import reactor.core.Disposables;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.util.retry.Retry;
 
 @Slf4j
 @Service
@@ -33,6 +40,8 @@ public class StmPoller {
     static final Duration FEED_STALE_AFTER = Duration.ofSeconds(60);
     private volatile Instant lastVehiclePositionsSuccess;
     private volatile Instant lastTripUpdatesSuccess;
+
+    private final Disposable.Composite polling = Disposables.composite();
 
     private final Sinks.Many<FeedMessage> vehiclePositionSink = Sinks.many().multicast().directBestEffort();
     private final Sinks.Many<FeedMessage> tripUpdateSink = Sinks.many().multicast().directBestEffort();
@@ -54,22 +63,37 @@ public class StmPoller {
 
     @EventListener(ApplicationReadyEvent.class)
     public void startPolling() {
-       
-        Flux.interval(Duration.ZERO, transitFeedPollInterval)
-                .flatMap(tick -> Mono.zip(
-                        fetchGtfsFeed("/vehiclePositions").doOnNext(feed -> {
-                            vehiclePositionSink.tryEmitNext(feed);
-                            markVehiclePositionsReceived(Instant.now());
-                        }),
-                        fetchGtfsFeed("/tripUpdates").doOnNext(feed -> {
-                            tripUpdateSink.tryEmitNext(feed);
-                            markTripUpdatesReceived(Instant.now());
-                        })
-                ))
-                .onErrorContinue((throwable, obj) -> 
-                        log.error("Recovered from error during STM polling cycle: {}", throwable.getMessage())
-                )
-                .subscribe();
+        poll("/vehiclePositions", vehiclePositionSink, this::markVehiclePositionsReceived);
+        poll("/tripUpdates", tripUpdateSink, this::markTripUpdatesReceived);
+    }
+
+    @PreDestroy
+    public void stopPolling() {
+        polling.dispose();
+    }
+
+    // One loop per feed, so a failing feed cannot cancel or delay the other.
+    private void poll(String endpoint, Sinks.Many<FeedMessage> sink, Consumer<Instant> markReceived) {
+        polling.add(pollingLoop(endpoint, transitFeedPollInterval).subscribe(feed -> {
+            sink.tryEmitNext(feed);
+            markReceived.accept(Instant.now());
+        }));
+    }
+
+    // At most one fetch at a time: a tick that arrives while the previous fetch is still running is skipped.
+    Flux<FeedMessage> pollingLoop(String endpoint, Duration interval) {
+        return selfHealing(endpoint, () -> Flux.interval(Duration.ZERO, interval)
+                .onBackpressureDrop(tick -> log.warn("Skipping a poll of {}: the previous one is still running", endpoint))
+                .flatMap(tick -> fetchGtfsFeed(endpoint), 1));
+    }
+
+    // Failed fetches are already absorbed in fetchGtfsFeed. This restarts the loop if the stream itself ever errors.
+    static <T> Flux<T> selfHealing(String name, Supplier<Flux<T>> source) {
+        return Flux.defer(source).retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(1))
+                .maxBackoff(Duration.ofSeconds(30))
+                .transientErrors(true)
+                .doBeforeRetry(signal -> log.error("Polling of {} stopped ({}), restarting",
+                        name, signal.failure().toString())));
     }
 
     private Mono<FeedMessage> fetchGtfsFeed(String endpoint) {
