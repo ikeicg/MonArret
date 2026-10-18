@@ -8,6 +8,7 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.proj4j.ProjCoordinate;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -37,6 +38,8 @@ public class LiveStateEngine {
 	private final ActiveTripStateStore tripStateStore;
 	private final GeometricOperationsService geoOpsService;
 	private final Clock montrealClock;
+	private final IngestMetrics tripUpdatesMetrics;
+	private final IngestMetrics vehiclePositionsMetrics;
 
 	private final AtomicLong lastTripUpdatesHeaderTimestamp = new AtomicLong(-1);
 	private final AtomicLong lastVehiclePositionsHeaderTimestamp = new AtomicLong(-1);
@@ -47,12 +50,14 @@ public class LiveStateEngine {
 	private final AtomicLong ingestedVehiclePositionsTimestamp = new AtomicLong(-1);
 
 	public LiveStateEngine(StmPoller poller, ActiveTripStateStore tripStateStore,
-			GeometricOperationsService geoOpsService, Clock montrealClock) {
+			GeometricOperationsService geoOpsService, Clock montrealClock, MeterRegistry meterRegistry) {
 		tripUpdatesFeed = poller.getTripUpdatesPublisher();
 		vehiclePositionsFeed = poller.getVehiclePositionsPublisher();
 		this.tripStateStore = tripStateStore;
 		this.geoOpsService = geoOpsService;
 		this.montrealClock = montrealClock;
+		this.tripUpdatesMetrics = new IngestMetrics("tripUpdates", "trip update", meterRegistry);
+		this.vehiclePositionsMetrics = new IngestMetrics("vehiclePositions", "vehicle position", meterRegistry);
 	}
 
 	@EventListener(ApplicationReadyEvent.class)
@@ -85,6 +90,24 @@ public class LiveStateEngine {
 		return ingestedTripUpdatesTimestamp.get() + "-" + ingestedVehiclePositionsTimestamp.get();
 	}
 
+	// Milliseconds the newest ingested message took, or -1 before the first one.
+	public long lastTripUpdatesIngestMillis() {
+		return tripUpdatesMetrics.lastMillis();
+	}
+
+	public long lastVehiclePositionsIngestMillis() {
+		return vehiclePositionsMetrics.lastMillis();
+	}
+
+	// Milliseconds the first message after startup took (it builds the trip states), or -1 before it.
+	public long firstTripUpdatesIngestMillis() {
+		return tripUpdatesMetrics.firstMillis();
+	}
+
+	public long firstVehiclePositionsIngestMillis() {
+		return vehiclePositionsMetrics.firstMillis();
+	}
+
 	private long ingestedStamp(FeedMessage feed) {
 		return feed.getHeader().hasTimestamp() ? feed.getHeader().getTimestamp() : montrealClock.instant().getEpochSecond();
 	}
@@ -93,6 +116,8 @@ public class LiveStateEngine {
 
 		if(feed == null) return;
 		if(isRepeatedMessage(feed, lastTripUpdatesHeaderTimestamp)) return;
+
+		long startedAt = System.nanoTime();
 
 		for(FeedEntity entity : feed.getEntityList()) {
 
@@ -109,6 +134,7 @@ public class LiveStateEngine {
 		}
 
 		ingestedTripUpdatesTimestamp.set(ingestedStamp(feed));
+		tripUpdatesMetrics.record(feed.getEntityCount(), startedAt);
 	}
 
 	private void processTripUpdate(TripUpdate tripUpdate) {
@@ -209,6 +235,8 @@ public class LiveStateEngine {
 		if(feed == null) return;
 		if(isRepeatedMessage(feed, lastVehiclePositionsHeaderTimestamp)) return;
 
+		long startedAt = System.nanoTime();
+
 		for(FeedEntity entity : feed.getEntityList()) {
 
 			if(!entity.hasVehicle()) continue;
@@ -224,6 +252,7 @@ public class LiveStateEngine {
 		}
 
 		ingestedVehiclePositionsTimestamp.set(ingestedStamp(feed));
+		vehiclePositionsMetrics.record(feed.getEntityCount(), startedAt);
 	}
 
 	private void processVehiclePosition(VehiclePosition vehicle) {

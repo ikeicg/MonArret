@@ -64,6 +64,20 @@ class LiveFeedHealthIndicatorTest {
 	}
 
 	@Test
+	void ingestTimings_areReportedOnceTheyExist() {
+		when(engine.lastTripUpdatesIngestMillis()).thenReturn(85L);
+		when(engine.firstTripUpdatesIngestMillis()).thenReturn(4200L);
+		when(engine.lastVehiclePositionsIngestMillis()).thenReturn(-1L);
+		when(engine.firstVehiclePositionsIngestMillis()).thenReturn(-1L);
+
+		Health health = indicator.health(T0);
+
+		assertThat(health.getDetails()).containsEntry("lastTripUpdatesIngestMs", 85L)
+				.containsEntry("firstTripUpdatesIngestMs", 4200L)
+				.doesNotContainKeys("lastVehiclePositionsIngestMs", "firstVehiclePositionsIngestMs");
+	}
+
+	@Test
 	void staleFeed_isReportedAsDownButTheAppStaysUp() {
 		poller.markVehiclePositionsReceived(T0);
 		poller.markTripUpdatesReceived(T0);

@@ -22,7 +22,6 @@ services:
 
     mem_limit: ${BACKEND_MEM_LIMIT:-2g}
 
-    # The management port is not published; this check runs inside the container.
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health"]
       interval: 30s

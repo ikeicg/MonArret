@@ -39,7 +39,17 @@ public class LiveFeedHealthIndicator implements HealthIndicator {
 				.withDetail("feedVersion", engine.feedVersion());
 		addAge(health, "vehiclePositionsAgeSeconds", poller.getLastVehiclePositionsSuccess(), now);
 		addAge(health, "tripUpdatesAgeSeconds", poller.getLastTripUpdatesSuccess(), now);
+		addMillis(health, "lastTripUpdatesIngestMs", engine.lastTripUpdatesIngestMillis());
+		addMillis(health, "lastVehiclePositionsIngestMs", engine.lastVehiclePositionsIngestMillis());
+		addMillis(health, "firstTripUpdatesIngestMs", engine.firstTripUpdatesIngestMillis());
+		addMillis(health, "firstVehiclePositionsIngestMs", engine.firstVehiclePositionsIngestMillis());
 		return health.build();
+	}
+
+	private static void addMillis(Health.Builder health, String name, long millis) {
+		if (millis >= 0) {
+			health.withDetail(name, millis);
+		}
 	}
 
 	private static void addAge(Health.Builder health, String name, Instant lastSuccess, Instant now) {

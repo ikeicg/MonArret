@@ -19,6 +19,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.mockito.Mock;
@@ -65,6 +66,7 @@ class LiveStateEngineTest {
 	private ActiveTripStateStore store;
 	private Clock fixedClock;
 	private LiveStateEngine engine;
+	private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
 	@BeforeEach
 	void setUp() {
@@ -78,7 +80,7 @@ class LiveStateEngineTest {
 		when(poller.getTripUpdatesPublisher()).thenReturn(Flux.empty());
 		when(poller.getVehiclePositionsPublisher()).thenReturn(Flux.empty());
 
-		engine = new LiveStateEngine(poller, store, geoOpsService, fixedClock);
+		engine = new LiveStateEngine(poller, store, geoOpsService, fixedClock, meters);
 	}
 
 	// --- handleTripUpdates ---
@@ -130,6 +132,23 @@ class LiveStateEngineTest {
 
 		assertThat(store.fetchTripState("trip-d1").orElseThrow().getScheduleRelationship()).isEqualTo("CANCELED");
 		verify(tripRepository, never()).findById("trip-d1");
+	}
+
+	@Test
+	void eachIngestedMessage_isTimedOnce_andARepeatedMessageIsNot() {
+
+		FeedMessage message = withHeaderTimestamp(feedWithTripUpdate(
+				tripUpdate("trip-m1", TripDescriptor.ScheduleRelationship.CANCELED, "10", 0)), 1000);
+
+		assertThat(engine.lastTripUpdatesIngestMillis()).isEqualTo(-1);
+
+		engine.handleTripUpdates(message);
+		engine.handleTripUpdates(message);
+
+		assertThat(meters.get("feed.ingest").tag("feed", "tripUpdates").timer().count()).isEqualTo(1);
+		assertThat(engine.lastTripUpdatesIngestMillis()).isGreaterThanOrEqualTo(0);
+		assertThat(engine.firstTripUpdatesIngestMillis()).isGreaterThanOrEqualTo(0);
+		assertThat(engine.lastVehiclePositionsIngestMillis()).isEqualTo(-1);
 	}
 
 	@Test
