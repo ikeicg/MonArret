@@ -1,10 +1,13 @@
 package com.monarret.backend.service;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -14,7 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.zip.ZipFile;
 
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -90,14 +93,17 @@ public class GtfsStaticLoader implements CommandLineRunner {
 	@Transactional
     public void execute(String... args) {
         log.info("GTFS static data load started");
-        Map<String, List<?>> entities;
+        Path zipPath = null;
         try {
-            byte[] zipBytes = downloadGtfsZip();
-            entities = handleGtfsZip(zipBytes);
-            
-            truncateStagingSchema();
-            persistToStagingWithBatch(entities);
-            
+            zipPath = downloadGtfsZip();
+            Map<String, List<?>> entities;
+            try (ZipFile zip = new ZipFile(zipPath.toFile())) {
+                entities = handleGtfsZip(zip);
+
+                truncateStagingSchema();
+                persistToStagingWithBatch(entities, zip);
+            }
+
             if (validateStagingSchema()) {
                 swapStagingToStatic();
                 clearSearchCaches();
@@ -105,7 +111,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
                 // Update application based on feed info
                 FeedInfo currentFeedInfo = (FeedInfo) entities.get("feed_info").get(0);
                 updateAppConfig(currentFeedInfo);
-                
+
                 log.info("GTFS static data load completed successfully");
             } else {
                 log.error("Staging validation failed, aborting schema swap");
@@ -116,83 +122,102 @@ public class GtfsStaticLoader implements CommandLineRunner {
             throw new RuntimeException("Failed to load GTFS data", e);
         }
         finally {
-        	entities = null;
+            deleteQuietly(zipPath);
         }
     }
-    
-	private byte[] downloadGtfsZip() {
-        String targetUrl = (overrideUrl != null && !overrideUrl.trim().isEmpty()) 
-            ? overrideUrl 
+
+	private Path downloadGtfsZip() throws IOException {
+        String targetUrl = (overrideUrl != null && !overrideUrl.trim().isEmpty())
+            ? overrideUrl
             : DEFAULT_STM_GTFS_URL;
-            
+
         log.info("Downloading GTFS ZIP from STM using URL: {}", targetUrl);
-        
-        byte[] data = restClient.get()
-            .uri(targetUrl)
-            .retrieve()
-            .body(byte[].class);
-            
-        log.info("Downloaded {} bytes", data.length);
-        return data;
+
+        Path zipPath = Files.createTempFile("gtfs-", ".zip");
+        try {
+            restClient.get()
+                .uri(targetUrl)
+                .exchange((request, response) -> {
+                    if (response.getStatusCode().isError()) {
+                        throw new IOException("GTFS download failed with status " + response.getStatusCode());
+                    }
+                    Files.copy(response.getBody(), zipPath, StandardCopyOption.REPLACE_EXISTING);
+                    return null;
+                });
+        } catch (RuntimeException e) {
+            deleteQuietly(zipPath);
+            throw e;
+        }
+
+        log.info("Downloaded {} bytes", Files.size(zipPath));
+        return zipPath;
     }
-    
-    private Map<String, List<?>> handleGtfsZip(byte[] zipFile) throws IOException {
+
+    private void deleteQuietly(Path path) {
+        if (path == null) return;
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            log.warn("Could not delete temporary file {}: {}", path, e.getMessage());
+        }
+    }
+
+    // stop_times is not parsed here: it is too large to hold in memory and is streamed to staging instead.
+    private Map<String, List<?>> handleGtfsZip(ZipFile zip) throws IOException {
         Map<String, List<?>> entities = new HashMap<>();
-        
-        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipFile))) {
-            ZipEntry entry;
-            
-            while ((entry = zis.getNextEntry()) != null) {
-                String fileName = entry.getName();
-                log.debug("Processing file: {}", fileName);
-                
+
+        var entries = zip.entries();
+        while (entries.hasMoreElements()) {
+            ZipEntry entry = entries.nextElement();
+            String fileName = entry.getName();
+            log.debug("Processing file: {}", fileName);
+
+            try (InputStream in = zip.getInputStream(entry)) {
                 switch (fileName) {
                     case "agency.txt":
-                        entities.put("agencies", parseAgency(zis));
+                        entities.put("agencies", parseAgency(in));
                         break;
                     case "calendar.txt":
-                        entities.put("calendars", parseCalendar(zis));
+                        entities.put("calendars", parseCalendar(in));
                         break;
                     case "calendar_dates.txt":
-                        entities.put("calendar_dates", parseCalendarDates(zis));
+                        entities.put("calendar_dates", parseCalendarDates(in));
                         break;
                     case "directions.txt":
-                        entities.put("directions", parseDirections(zis));
+                        entities.put("directions", parseDirections(in));
                         break;
                     case "feed_info.txt":
-                        entities.put("feed_info", parseFeedInfo(zis));
+                        entities.put("feed_info", parseFeedInfo(in));
                         break;
                     case "route_patterns.txt":
-                        entities.put("route_patterns", parseRoutePatterns(zis));
+                        entities.put("route_patterns", parseRoutePatterns(in));
                         break;
                     case "routes.txt":
-                        entities.put("routes", parseRoutes(zis));
+                        entities.put("routes", parseRoutes(in));
                         break;
                     case "shapes.txt":
-                        entities.put("shapes", parseShapes(zis));
-                        break;
-                    case "stop_times.txt":
-                        entities.put("stop_times", parseStopTimes(zis));
+                        entities.put("shapes", parseShapes(in));
                         break;
                     case "stops.txt":
-                        entities.put("stops", parseStops(zis));
+                        entities.put("stops", parseStops(in));
                         break;
                     case "trips.txt":
-                        entities.put("trips", parseTrips(zis));
+                        entities.put("trips", parseTrips(in));
+                        break;
+                    case "stop_times.txt":
                         break;
                     default:
                         log.debug("Skipping unknown file: {}", fileName);
                 }
-                
             }
         }
-        
+
         return entities;
     }
-    
+
     // Parser methods
     
-    private List<Agency> parseAgency(ZipInputStream zis) throws IOException {
+    private List<Agency> parseAgency(InputStream zis) throws IOException {
         List<Agency> agencies = new ArrayList<>();
         
         BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
@@ -228,7 +253,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
         return agencies;
     }
     
-    private List<Calendar> parseCalendar(ZipInputStream zis) throws IOException {
+    private List<Calendar> parseCalendar(InputStream zis) throws IOException {
         List<Calendar> calendars = new ArrayList<>();
         
         BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
@@ -267,7 +292,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
         return calendars;
     }
     
-    private List<CalendarDate> parseCalendarDates(ZipInputStream zis) throws IOException {
+    private List<CalendarDate> parseCalendarDates(InputStream zis) throws IOException {
         List<CalendarDate> calendarDates = new ArrayList<>();
         
         BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
@@ -301,7 +326,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
         return calendarDates;
     }
     
-    private List<Stop> parseStops(ZipInputStream zis) throws IOException {
+    private List<Stop> parseStops(InputStream zis) throws IOException {
         List<Stop> stops = new ArrayList<>();
         
         BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
@@ -340,7 +365,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
         return stops;
     }
     
-    private List<Route> parseRoutes(ZipInputStream zis) throws IOException {
+    private List<Route> parseRoutes(InputStream zis) throws IOException {
         List<Route> routes = new ArrayList<>();
         
         BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
@@ -376,7 +401,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
         return routes;
     }
     
-    private List<Direction> parseDirections(ZipInputStream zis) throws IOException {
+    private List<Direction> parseDirections(InputStream zis) throws IOException {
         List<Direction> directions = new ArrayList<>();
         
         BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
@@ -408,7 +433,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
         return directions;
     }
     
-    private List<RoutePattern> parseRoutePatterns(ZipInputStream zis) throws IOException {
+    private List<RoutePattern> parseRoutePatterns(InputStream zis) throws IOException {
         List<RoutePattern> patterns = new ArrayList<>();
         
         BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
@@ -439,7 +464,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
         return patterns;
     }
     
-    private List<Shape> parseShapes(ZipInputStream zis) throws IOException {
+    private List<Shape> parseShapes(InputStream zis) throws IOException {
         List<Shape> shapes = new ArrayList<>();
         
         BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
@@ -478,7 +503,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
         return shapes;
     }
     
-    private List<Trip> parseTrips(ZipInputStream zis) throws IOException {
+    private List<Trip> parseTrips(InputStream zis) throws IOException {
         List<Trip> trips = new ArrayList<>();
         
        BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
@@ -513,44 +538,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
         return trips;
     }
     
-    private List<StopTime> parseStopTimes(ZipInputStream zis) throws IOException {
-        List<StopTime> stopTimes = new ArrayList<>();
-        
-        BufferedReader reader = new BufferedReader(new InputStreamReader(zis, StandardCharsets.UTF_8));
-        reader.readLine();  
-        String line;
-        int rowCount = 0;
-        
-        while ((line = reader.readLine()) != null) {
-            try {
-                String[] fields = line.split(",");
-                
-                StopTimeId id = StopTimeId.builder()
-                    .tripId(fields[0].trim())
-                    .stopSequence(Integer.parseInt(fields[4].trim()))
-                    .build();
-                
-                StopTime stopTime = StopTime.builder()
-                    .id(id)
-                    .arrivalTime(parseTime(fields[1]))
-                    .departureTime(parseTime(fields[2]))
-                    .stopId(safeField(fields, 3))
-                    .pickupType(safeFieldInt(fields, 5))
-                    .createdAt(Instant.now())
-                    .build();
-                
-                stopTimes.add(stopTime);
-                rowCount++;
-            } catch (Exception e) {
-                log.warn("Skipping malformed stop_time row: {}", e.getMessage());
-            }
-        }
-        log.info("Parsed {} stop times", rowCount);
-        
-        return stopTimes;
-    }
-    
-    private List<FeedInfo> parseFeedInfo(ZipInputStream zis) throws IOException {
+    private List<FeedInfo> parseFeedInfo(InputStream zis) throws IOException {
     	List<FeedInfo> feedInfos = new ArrayList<>();
     	FeedInfo feedInfo;
         
@@ -616,7 +604,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
     }
     
     @Transactional
-    private void persistToStagingWithBatch(Map<String, List<?>> entities) {
+    private void persistToStagingWithBatch(Map<String, List<?>> entities, ZipFile zip) throws IOException {
         log.info("Persisting GTFS entities to gtfs_staging with batch updates");
         
         // Tier 1: Leaf entities
@@ -640,7 +628,14 @@ public class GtfsStaticLoader implements CommandLineRunner {
         
         // Tier 4: Depends on Tier 3
         log.info("Persisting Tier 4 (stop_times)...");
-        persistStopTimes((List<StopTime>) entities.getOrDefault("stop_times", new ArrayList<>()));
+        ZipEntry stopTimesEntry = zip.getEntry("stop_times.txt");
+        if (stopTimesEntry == null) {
+            log.warn("No stop_times.txt in the GTFS zip");
+        } else {
+            try (InputStream in = zip.getInputStream(stopTimesEntry)) {
+                persistStopTimes(in);
+            }
+        }
         
         log.info("Staging persistence complete");
     }
@@ -856,8 +851,53 @@ public class GtfsStaticLoader implements CommandLineRunner {
         log.info("Persisted {} trips", trips.size());
     }
     
-    private void persistStopTimes(List<StopTime> stopTimes) {
+    static final int STOP_TIME_CHUNK_SIZE = 5000;
+
+    // Reads stop_times.txt line by line and inserts it in fixed-size chunks, so memory stays flat however large the file is.
+    int persistStopTimes(InputStream in) throws IOException {
         String sql = "INSERT INTO gtfs_staging.stop_times (trip_id, stop_sequence, stop_id, arrival_time, departure_time, pickup_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+        reader.readLine();
+        List<StopTime> chunk = new ArrayList<>(STOP_TIME_CHUNK_SIZE);
+        int persisted = 0;
+        String line;
+
+        while ((line = reader.readLine()) != null) {
+            try {
+                String[] fields = line.split(",");
+
+                StopTimeId id = StopTimeId.builder()
+                    .tripId(fields[0].trim())
+                    .stopSequence(Integer.parseInt(fields[4].trim()))
+                    .build();
+
+                chunk.add(StopTime.builder()
+                    .id(id)
+                    .arrivalTime(parseTime(fields[1]))
+                    .departureTime(parseTime(fields[2]))
+                    .stopId(safeField(fields, 3))
+                    .pickupType(safeFieldInt(fields, 5))
+                    .createdAt(Instant.now())
+                    .build());
+            } catch (Exception e) {
+                log.warn("Skipping malformed stop_time row: {}", e.getMessage());
+                continue;
+            }
+
+            if (chunk.size() == STOP_TIME_CHUNK_SIZE) {
+                persisted += insertStopTimes(sql, chunk);
+                chunk.clear();
+            }
+        }
+        if (!chunk.isEmpty()) {
+            persisted += insertStopTimes(sql, chunk);
+        }
+
+        log.info("Persisted {} stop times", persisted);
+        return persisted;
+    }
+
+    private int insertStopTimes(String sql, List<StopTime> stopTimes) {
         jdbcTemplate.batchUpdate(sql, stopTimes, 2000, (ps, st) -> {
             ps.setString(1, st.getId().getTripId());
             ps.setInt(2, st.getId().getStopSequence());
@@ -867,9 +907,9 @@ public class GtfsStaticLoader implements CommandLineRunner {
             ps.setObject(6, st.getPickupType());
             ps.setObject(7, Timestamp.from(st.getCreatedAt()));
         });
-        log.info("Persisted {} stop times", stopTimes.size());
+        return stopTimes.size();
     }
-    
+
     private void persistFeedInfo(List<FeedInfo> feedInfos) {
         if (feedInfos.isEmpty()) {
             log.warn("No feed info to persist");
