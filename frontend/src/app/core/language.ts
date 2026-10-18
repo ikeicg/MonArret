@@ -7,7 +7,7 @@ import { Observable } from 'rxjs';
 export const LANGUAGES = ['en', 'fr'] as const;
 export type Language = (typeof LANGUAGES)[number];
 
-const STORAGE_KEY = 'csm.lang';
+const STORAGE_KEY = 'monarret.lang';
 
 @Injectable({ providedIn: 'root' })
 export class TranslocoHttpLoader implements TranslocoLoader {

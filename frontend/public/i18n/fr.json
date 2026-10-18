@@ -1,7 +1,15 @@
 {
   "app": {
-    "title": "CatchMySTM",
+    "title": "MonArret",
     "tagline": "Comment va votre autobus?"
+  },
+  "footer": {
+    "dataBy": "Données de transport :",
+    "stm": "Société de transport de Montréal (STM)",
+    "stmUrl": "https://www.stm.info/fr/a-propos/developpeurs",
+    "licence": "CC BY 4.0",
+    "licenceUrl": "https://creativecommons.org/licenses/by/4.0/deed.fr",
+    "disclaimer": "MonArret est un projet indépendant, non affilié à la STM ni approuvé par celle-ci. Les données sont fournies telles quelles, sans garantie d'exactitude."
   },
   "lang": {
     "label": "Langue",

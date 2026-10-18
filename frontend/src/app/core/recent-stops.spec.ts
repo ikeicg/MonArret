@@ -50,10 +50,10 @@ describe('RecentStops', () => {
   });
 
   it('skips stored entries that are not whole, and unreadable data', () => {
-    localStorage.setItem('csm.recent-stops', JSON.stringify([stop('ok'), { routeId: '24' }]));
+    localStorage.setItem('monarret.recent-stops', JSON.stringify([stop('ok'), { routeId: '24' }]));
     expect(create().list().map((s) => s.stopId)).toEqual(['ok']);
 
-    localStorage.setItem('csm.recent-stops', '{not json');
+    localStorage.setItem('monarret.recent-stops', '{not json');
     expect(create().list()).toEqual([]);
   });
 });

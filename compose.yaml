@@ -5,7 +5,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
 
-    image: csm-backend
+    image: monarret-backend
 
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
@@ -35,7 +35,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
 
-    image: csm-frontend
+    image: monarret-frontend
 
     ports:
       - "${WEB_PORT:-80}:80"

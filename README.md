@@ -1,4 +1,4 @@
-# CatchMySTM
+# MonArret
 
 Real-time transit catch-probability tracker for Montreal STM.
 

@@ -4,15 +4,17 @@ import { RouterOutlet } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 
 import { online$ } from './core/poll';
+import { SiteFooter } from './shared/site-footer';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, TranslocoPipe],
+  imports: [RouterOutlet, TranslocoPipe, SiteFooter],
   template: `
     @if (!online()) {
       <div class="offline-bar" role="status">{{ 'net.offline' | transloco }}</div>
     }
     <router-outlet />
+    <app-site-footer />
   `,
 })
 export class App {

@@ -40,7 +40,7 @@ describe('BrandBar', () => {
     (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.lang-toggle button')[1].click();
     await fixture.whenStable();
 
-    expect(localStorage.getItem('csm.lang')).toBe('fr');
+    expect(localStorage.getItem('monarret.lang')).toBe('fr');
     expect(document.documentElement.lang).toBe('fr');
   });
 });

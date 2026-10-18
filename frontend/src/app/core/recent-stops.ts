@@ -10,7 +10,7 @@ export interface RecentStop {
   stopName: string;
 }
 
-const STORAGE_KEY = 'csm.recent-stops';
+const STORAGE_KEY = 'monarret.recent-stops';
 const MAX_STOPS = 3;
 
 @Injectable({ providedIn: 'root' })

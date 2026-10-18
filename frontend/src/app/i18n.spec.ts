@@ -10,7 +10,7 @@ function keys(tree: Record<string, unknown>, prefix = ''): string[] {
   );
 }
 
-const sources = ['src/app/pick/pick-page.html', 'src/app/trip/trip-page.html', 'src/app/shared/brand-bar.ts']
+const sources = ['src/app/pick/pick-page.html', 'src/app/trip/trip-page.html', 'src/app/shared/brand-bar.ts', 'src/app/shared/site-footer.ts']
   .map((file) => readFileSync(file, 'utf-8'))
   .join('\n');
 
