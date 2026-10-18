@@ -102,6 +102,14 @@ public class StmPoller {
         lastTripUpdatesSuccess = at;
     }
 
+    public Instant getLastVehiclePositionsSuccess() {
+        return lastVehiclePositionsSuccess;
+    }
+
+    public Instant getLastTripUpdatesSuccess() {
+        return lastTripUpdatesSuccess;
+    }
+
     public FeedHealth getFeedHealth() {
         return getFeedHealth(Instant.now());
     }
