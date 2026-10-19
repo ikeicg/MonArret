@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -35,6 +37,7 @@ import com.monarret.backend.entity.Trip;
 import com.monarret.backend.repository.ShapeRepository;
 import com.monarret.backend.repository.TripRepository;
 import com.monarret.backend.runtime.model.StopTimeContext;
+import com.monarret.backend.runtime.model.TripSnapshot;
 import com.monarret.backend.service.StmPoller;
 import com.google.transit.realtime.GtfsRealtime.FeedEntity;
 import com.google.transit.realtime.GtfsRealtime.FeedHeader;
@@ -747,6 +750,233 @@ class LiveStateEngineTest {
 
 		assertThat(afterVehicles).isNotEqualTo(afterTripUpdates);
 		assertThat(engine.feedVersion()).isNotEqualTo(afterVehicles);
+	}
+
+	// --- idempotency: ingesting the same content again leaves the state exactly as it was ---
+
+	@Nested
+	class Idempotency {
+
+		private TripUpdate scheduledWithEstimate(String tripId) {
+			return TripUpdate.newBuilder()
+					.setTrip(TripDescriptor.newBuilder().setTripId(tripId).setStartDate(SERVICE_DATE)
+							.setScheduleRelationship(TripDescriptor.ScheduleRelationship.SCHEDULED)
+							.setRouteId("10").setDirectionId(0).build())
+					.addStopTimeUpdate(TripUpdate.StopTimeUpdate.newBuilder()
+							.setStopSequence(2)
+							.setArrival(TripUpdate.StopTimeEvent.newBuilder().setTime(EPOCH_T0 + 600).build())
+							.setScheduleRelationship(TripUpdate.StopTimeUpdate.ScheduleRelationship.SCHEDULED)
+							.build())
+					.build();
+		}
+
+		private VehiclePosition position(String tripId, long timestamp) {
+			return vehicleAt(tripId, 45.525f, -73.575f)
+					.setTimestamp(timestamp)
+					.setCurrentStopSequence(1)
+					.setCurrentStatus(VehiclePosition.VehicleStopStatus.IN_TRANSIT_TO)
+					.setOccupancyStatus(VehiclePosition.OccupancyStatus.FEW_SEATS_AVAILABLE)
+					.build();
+		}
+
+		// lastSeenInFeed moves on every sighting by design: it keeps a trip that is seen again from being evicted
+		private void assertSameData(TripSnapshot actual, TripSnapshot expected) {
+			assertThat(actual).usingRecursiveComparison().ignoringFields("lastSeenInFeed").isEqualTo(expected);
+		}
+
+		private TripSnapshot snapshot(String tripId) {
+			return store.snapshotTrip(tripId).orElseThrow();
+		}
+
+		@Test
+		void theSameTripUpdate_ingestedTwice_leavesTheSnapshotUnchanged() {
+			stubStaticSchedule("idem-1");
+			FeedMessage message = feedWithTripUpdate(scheduledWithEstimate("idem-1"));
+
+			engine.handleTripUpdates(message);
+			TripSnapshot afterOnce = snapshot("idem-1");
+			engine.handleTripUpdates(message);
+
+			assertSameData(snapshot("idem-1"), afterOnce);
+		}
+
+		@Test
+		void theSameVehiclePosition_ingestedTwice_isOnePing() {
+			stubStaticSchedule("idem-2");
+			FeedMessage message = feedWithVehicle(position("idem-2", EPOCH_T0));
+
+			engine.handleVehiclePositions(message);
+			TripSnapshot afterOnce = snapshot("idem-2");
+			engine.handleVehiclePositions(message);
+
+			assertSameData(snapshot("idem-2"), afterOnce);
+			assertThat(snapshot("idem-2").recentPings()).hasSize(1);
+		}
+
+		@Test
+		void replayingBothFeeds_manyTimes_endsInTheSameState() {
+			stubStaticSchedule("idem-3");
+			FeedMessage updates = feedWithTripUpdate(scheduledWithEstimate("idem-3"));
+			FeedMessage positions = feedWithVehicle(position("idem-3", EPOCH_T0));
+
+			engine.handleTripUpdates(updates);
+			engine.handleVehiclePositions(positions);
+			TripSnapshot afterOneRound = snapshot("idem-3");
+
+			for (int round = 0; round < 3; round++) {
+				engine.handleVehiclePositions(positions);
+				engine.handleTripUpdates(updates);
+			}
+
+			assertSameData(snapshot("idem-3"), afterOneRound);
+		}
+
+		@Test
+		void aNewMessageCarryingUnchangedContent_changesNothing() {
+			stubStaticSchedule("idem-4");
+			engine.handleTripUpdates(withHeaderTimestamp(feedWithTripUpdate(scheduledWithEstimate("idem-4")), 1000));
+			engine.handleVehiclePositions(withHeaderTimestamp(feedWithVehicle(position("idem-4", EPOCH_T0)), 1000));
+			TripSnapshot afterFirstCycle = snapshot("idem-4");
+
+			// the next cycle: new header timestamps, STM has nothing new for this trip
+			engine.handleTripUpdates(withHeaderTimestamp(feedWithTripUpdate(scheduledWithEstimate("idem-4")), 1020));
+			engine.handleVehiclePositions(withHeaderTimestamp(feedWithVehicle(position("idem-4", EPOCH_T0)), 1020));
+
+			assertSameData(snapshot("idem-4"), afterFirstCycle);
+		}
+
+		@Test
+		void aCanceledTrip_ingestedTwice_isTheSameBareState() {
+			FeedMessage message = feedWithTripUpdate(
+					tripUpdate("idem-5", TripDescriptor.ScheduleRelationship.CANCELED, "10", 0));
+
+			engine.handleTripUpdates(message);
+			TripSnapshot afterOnce = snapshot("idem-5");
+			engine.handleTripUpdates(message);
+
+			assertSameData(snapshot("idem-5"), afterOnce);
+			assertThat(store.getActiveTripCount()).isEqualTo(1);
+		}
+	}
+
+	// --- broken input: nothing throws, nothing bad is stored, the good entities in the same message still land ---
+
+	@Nested
+	class BrokenInput {
+
+		@Test
+		void aMessageWithNoEntities_isIngestedWithoutEffect() {
+			assertThatCode(() -> {
+				engine.handleTripUpdates(emptyFeed());
+				engine.handleVehiclePositions(emptyFeed());
+			}).doesNotThrowAnyException();
+
+			assertThat(store.getActiveTripCount()).isZero();
+		}
+
+		@Test
+		void anEntityOfAnotherKind_isIgnored() {
+			FeedMessage onlyAnAlert = FeedMessage.newBuilder()
+					.setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0").build())
+					.addEntity(FeedEntity.newBuilder().setId("alert-1")
+							.setAlert(com.google.transit.realtime.GtfsRealtime.Alert.newBuilder().build()).build())
+					.build();
+
+			assertThatCode(() -> {
+				engine.handleTripUpdates(onlyAnAlert);
+				engine.handleVehiclePositions(onlyAnAlert);
+			}).doesNotThrowAnyException();
+
+			assertThat(store.getActiveTripCount()).isZero();
+		}
+
+		@Test
+		void aTripUpdateWithABlankTripId_isSkipped() {
+			engine.handleTripUpdates(feedWithTripUpdate(
+					tripUpdate("", TripDescriptor.ScheduleRelationship.SCHEDULED, "10", 0)));
+
+			assertThat(store.getActiveTripCount()).isZero();
+		}
+
+		@Test
+		void aStopTimeUpdateWithoutAStopSequence_isIgnored_andTheRestOfTheUpdateStillApplies() {
+			stubStaticSchedule("broken-1");
+			TripUpdate update = TripUpdate.newBuilder()
+					.setTrip(TripDescriptor.newBuilder().setTripId("broken-1").setStartDate(SERVICE_DATE)
+							.setScheduleRelationship(TripDescriptor.ScheduleRelationship.SCHEDULED).build())
+					.addStopTimeUpdate(TripUpdate.StopTimeUpdate.newBuilder()
+							.setArrival(TripUpdate.StopTimeEvent.newBuilder().setTime(EPOCH_T0 + 600).build()).build())
+					.build();
+
+			engine.handleTripUpdates(feedWithTripUpdate(update));
+
+			ActiveTripState state = store.fetchTripState("broken-1").orElseThrow();
+			assertThat(state.getScheduleRelationship()).isEqualTo("SCHEDULED");
+			assertThat(state.getStopSchedule()).allSatisfy(stop -> assertThat(stop.estimatedArrival()).isNull());
+		}
+
+		@Test
+		void aStopTimeUpdateForAStopTheScheduleDoesNotHave_isIgnored() {
+			stubStaticSchedule("broken-2");
+			TripUpdate update = TripUpdate.newBuilder()
+					.setTrip(TripDescriptor.newBuilder().setTripId("broken-2").setStartDate(SERVICE_DATE)
+							.setScheduleRelationship(TripDescriptor.ScheduleRelationship.SCHEDULED).build())
+					.addStopTimeUpdate(TripUpdate.StopTimeUpdate.newBuilder()
+							.setStopSequence(99)
+							.setArrival(TripUpdate.StopTimeEvent.newBuilder().setTime(EPOCH_T0 + 600).build()).build())
+					.build();
+
+			engine.handleTripUpdates(feedWithTripUpdate(update));
+
+			assertThat(store.fetchTripState("broken-2").orElseThrow().getStopSchedule())
+					.allSatisfy(stop -> assertThat(stop.estimatedArrival()).isNull());
+		}
+
+		@Test
+		void anAddedTrip_hasNoStaticSchedule_andGetsABareStateWithoutDatabaseWork() {
+			engine.handleTripUpdates(feedWithTripUpdate(
+					tripUpdate("broken-3", TripDescriptor.ScheduleRelationship.ADDED, "10", 0)));
+
+			assertThat(store.fetchTripState("broken-3").orElseThrow().getStopSchedule()).isNull();
+			verify(tripRepository, never()).findById("broken-3");
+		}
+
+		@Test
+		void aVehiclePositionWithoutAPosition_isSkipped() {
+			VehiclePosition noPosition = VehiclePosition.newBuilder()
+					.setTrip(TripDescriptor.newBuilder().setTripId("broken-4").setStartDate(SERVICE_DATE).build())
+					.setTimestamp(EPOCH_T0)
+					.build();
+
+			assertThatCode(() -> engine.handleVehiclePositions(feedWithVehicle(noPosition)))
+					.doesNotThrowAnyException();
+
+			assertThat(store.getActiveTripCount()).isZero();
+		}
+
+		@Test
+		void coordinatesThatAreNotRealPlaces_neverBecomePings() {
+			float[][] impossible = {
+					{Float.NaN, -73.57f}, {45.52f, Float.NaN},
+					{Float.POSITIVE_INFINITY, -73.57f}, {45.52f, Float.NEGATIVE_INFINITY},
+					{200f, -73.57f}, {45.52f, -500f}};
+
+			for (int i = 0; i < impossible.length; i++) {
+				String tripId = "broken-coords-" + i;
+				lenient().when(tripRepository.findById(tripId)).thenReturn(Optional.of(buildFakeTrip(tripId, 100, 200)));
+				lenient().when(shapeRepository.findByRoutePatternIdOrderByIdShapePtSequenceAsc(any()))
+						.thenReturn(buildFakeShapes());
+
+				VehiclePosition vehicle = vehicleAt(tripId, impossible[i][0], impossible[i][1])
+						.setTimestamp(EPOCH_T0).build();
+
+				assertThatCode(() -> engine.handleVehiclePositions(feedWithVehicle(vehicle)))
+						.doesNotThrowAnyException();
+
+				assertThat(store.fetchTripState(tripId).map(state -> state.getRecentPings().size()).orElse(0))
+						.as("pings for %s", tripId).isZero();
+			}
+		}
 	}
 
 	private FeedMessage emptyFeed() {

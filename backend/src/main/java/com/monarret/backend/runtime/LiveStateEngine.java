@@ -297,6 +297,10 @@ public class LiveStateEngine {
 		}
 
 		Position position = vehicle.getPosition();
+		if (!isRealPlace(position.getLatitude(), position.getLongitude())) {
+			log.debug("Skipping vehicle position for {}: coordinates are not a real place", tripId);
+			return;
+		}
 		ProjCoordinate projected = geoOpsService.transformWgsToUtm(position.getLongitude(), position.getLatitude());
 
 		Instant pingTime = Instant.ofEpochSecond(vehicle.getTimestamp());
@@ -331,6 +335,11 @@ public class LiveStateEngine {
 		});
 	}
 
+
+	private static boolean isRealPlace(float latitude, float longitude) {
+		return Float.isFinite(latitude) && Float.isFinite(longitude)
+				&& Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+	}
 
 	// Bounded to the stretch between the stops either side of the vehicle's current stop, so a route that
 	// revisits a place can't snap the ping to the wrong pass. Falls back to the whole route when the
