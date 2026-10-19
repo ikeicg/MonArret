@@ -79,7 +79,8 @@
     "STOP_AWAY_one": "stop away",
     "STOP_AWAY_other": "stops away",
     "HEADING_TO": "Heading to {{name}}",
-    "STOPPED_FOR": "Stopped for {{minutes}} min"
+    "STOPPED_FOR": "Stopped for {{minutes}} min",
+    "NOT_STOPPING": "The bus is nearly at your stop but will not stop there"
   },
   "timing": {
     "title": "Timing",

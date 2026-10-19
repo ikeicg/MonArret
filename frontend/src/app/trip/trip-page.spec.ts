@@ -90,4 +90,18 @@ describe('TripPage bus progress tile', () => {
     expect(page.textContent).toContain('Predicted departure (STM)');
     expect(page.textContent).toContain('Departs');
   });
+
+  it('does not claim "0 stops away" when the rider\'s skipped stop is the next one', async () => {
+    const skipped = {
+      ...health(null),
+      stopStatus: 'SKIPPED',
+      progress: { state: 'BEFORE_STOP', stopsAway: 0, nextStopName: null, movement: 'MOVING', stationarySeconds: null },
+    } as TripHealth;
+
+    const page = await render(skipped);
+
+    expect(page.textContent).toContain('will not stop there');
+    expect(page.textContent).not.toContain('0 stops away');
+    expect(page.textContent).not.toContain('Heading to');
+  });
 });

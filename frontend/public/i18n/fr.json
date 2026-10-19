@@ -79,7 +79,8 @@
     "STOP_AWAY_one": "arrêt à parcourir",
     "STOP_AWAY_other": "arrêts à parcourir",
     "HEADING_TO": "En direction de {{name}}",
-    "STOPPED_FOR": "Immobile depuis {{minutes}} min"
+    "STOPPED_FOR": "Immobile depuis {{minutes}} min",
+    "NOT_STOPPING": "L'autobus approche de votre arrêt mais ne s'y arrêtera pas"
   },
   "timing": {
     "title": "Horaire",

@@ -59,7 +59,9 @@
     <section class="tile" [class.tile--problem]="h.progress?.state === 'PASSED'">
       <h2 class="tile-label">{{ 'progress.title' | transloco }}</h2>
       @if (h.progress; as p) {
-        @if (p.state === 'BEFORE_STOP') {
+        @if (p.state === 'BEFORE_STOP' && !p.stopsAway) {
+          <p class="tile-text">{{ 'progress.NOT_STOPPING' | transloco }}</p>
+        } @else if (p.state === 'BEFORE_STOP') {
           <p class="row" style="align-items: baseline">
             <span class="tile-big">{{ p.stopsAway }}</span>
             <span class="tile-text">{{ (p.stopsAway === 1 ? 'progress.STOP_AWAY_one' : 'progress.STOP_AWAY_other') | transloco }}</span>
