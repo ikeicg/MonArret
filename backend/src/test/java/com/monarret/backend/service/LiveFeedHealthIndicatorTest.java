@@ -3,6 +3,7 @@ package com.monarret.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,7 @@ import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import com.monarret.backend.config.PollProperties;
 import com.monarret.backend.runtime.ActiveTripStateStore;
 import com.monarret.backend.runtime.LiveStateEngine;
 
@@ -33,7 +35,7 @@ class LiveFeedHealthIndicatorTest {
 
 	@BeforeEach
 	void setUp() {
-		poller = new StmPoller(WebClient.builder(), "http://localhost", "key");
+		poller = new StmPoller(WebClient.builder(), "http://localhost", "key", new PollProperties(Duration.ofSeconds(20)));
 		indicator = new LiveFeedHealthIndicator(poller, store, engine);
 		when(store.getActiveTripCount()).thenReturn(2300);
 		when(engine.feedVersion()).thenReturn("1760788800-1760788800");
@@ -82,7 +84,7 @@ class LiveFeedHealthIndicatorTest {
 		poller.markVehiclePositionsReceived(T0);
 		poller.markTripUpdatesReceived(T0);
 
-		Health health = indicator.health(T0.plus(StmPoller.FEED_STALE_AFTER).plusSeconds(1));
+		Health health = indicator.health(T0.plus(poller.feedStaleAfter()).plusSeconds(1));
 
 		assertThat(health.getStatus()).isEqualTo(Status.UP);
 		assertThat(health.getDetails()).containsEntry("feed", FeedHealth.DOWN);

@@ -18,6 +18,7 @@ services:
       STM_API_KEY: ${STM_API_KEY}
       STM_API_URL: ${STM_API_URL:-https://api.stm.info/pub/od/gtfs-rt/ic/v2}
       GTFS_URL_OVERRIDE: ${GTFS_URL_OVERRIDE:-}
+      STM_POLL_INTERVAL: ${STM_POLL_INTERVAL:-20s}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
 
     mem_limit: ${BACKEND_MEM_LIMIT:-2g}

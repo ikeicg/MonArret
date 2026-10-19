@@ -7,6 +7,8 @@ import java.util.function.Supplier;
 
 import jakarta.annotation.PreDestroy;
 
+import com.monarret.backend.config.PollProperties;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -31,13 +33,13 @@ public class StmPoller {
 
     private final WebClient webClient;
     private final String apiKey;
-    private final Duration transitFeedPollInterval = Duration.ofSeconds(20);
+    private final PollProperties pollProperties;
+    private final Duration transitFeedPollInterval;
 
     // WebClient's default cap is 256 KB, below the size of the tripUpdates feed.
     static final int MAX_FEED_BYTES = 16 * 1024 * 1024;
 
-    // Three missed poll cycles
-    static final Duration FEED_STALE_AFTER = Duration.ofSeconds(60);
+    static final int STALE_AFTER_MISSED_CYCLES = 3;
     private volatile Instant lastVehiclePositionsSuccess;
     private volatile Instant lastTripUpdatesSuccess;
 
@@ -49,9 +51,12 @@ public class StmPoller {
     public StmPoller(
             WebClient.Builder webClientBuilder,
             @Value("${stm.api.url:https://api.stm.info/pub/od/gtfs-rt/ic/v2}") String stmApiUrl,
-            @Value("${stm.api.key}") String apiKey) {
+            @Value("${stm.api.key}") String apiKey,
+            PollProperties pollProperties) {
         
         this.apiKey = apiKey;
+        this.pollProperties = pollProperties;
+        this.transitFeedPollInterval = pollProperties.interval();
         this.webClient = webClientBuilder
             .baseUrl(stmApiUrl)
             .codecs(configurer -> {
@@ -63,6 +68,12 @@ public class StmPoller {
 
     @EventListener(ApplicationReadyEvent.class)
     public void startPolling() {
+        log.info("Polling both feeds every {} s: {} of the {} requests STM allows per day",
+                transitFeedPollInterval.toSeconds(), pollProperties.requestsPerDay(), PollProperties.STM_DAILY_QUOTA);
+        if (pollProperties.exceedsRecommendedMax()) {
+            log.warn("A poll interval above {} s leaves too few positions in the 120 s window for the off-route rule",
+                    PollProperties.MAX_RECOMMENDED_SECONDS);
+        }
         poll("/vehiclePositions", vehiclePositionSink, this::markVehiclePositionsReceived);
         poll("/tripUpdates", tripUpdateSink, this::markTripUpdatesReceived);
     }
@@ -119,6 +130,11 @@ public class StmPoller {
                 });
     }
 
+    // Three missed poll cycles
+    Duration feedStaleAfter() {
+        return transitFeedPollInterval.multipliedBy(STALE_AFTER_MISSED_CYCLES);
+    }
+
     void markVehiclePositionsReceived(Instant at) {
         lastVehiclePositionsSuccess = at;
     }
@@ -145,7 +161,7 @@ public class StmPoller {
         if (vehicles == null && updates == null) return FeedHealth.STARTING;
         if (vehicles == null || updates == null) return FeedHealth.DOWN;
 
-        Instant cutoff = now.minus(FEED_STALE_AFTER);
+        Instant cutoff = now.minus(feedStaleAfter());
         return vehicles.isBefore(cutoff) || updates.isBefore(cutoff) ? FeedHealth.DOWN : FeedHealth.HEALTHY;
     }
 

@@ -3,6 +3,7 @@ package com.monarret.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import com.monarret.backend.config.PollProperties;
 import com.monarret.backend.runtime.ActiveTripStateStore;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -27,7 +29,7 @@ class FeedMetricsTest {
 
 	@BeforeEach
 	void setUp() {
-		poller = new StmPoller(WebClient.builder(), "http://localhost", "key");
+		poller = new StmPoller(WebClient.builder(), "http://localhost", "key", new PollProperties(Duration.ofSeconds(20)));
 		registry = new SimpleMeterRegistry();
 		new FeedMetrics(poller, store).bindTo(registry);
 	}

@@ -2,11 +2,14 @@ package com.monarret.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
+
+import com.monarret.backend.config.PollProperties;
 
 class StmPollerFeedHealthTest {
 
@@ -16,7 +19,7 @@ class StmPollerFeedHealthTest {
 
 	@BeforeEach
 	void setUp() {
-		poller = new StmPoller(WebClient.builder(), "http://localhost", "key");
+		poller = new StmPoller(WebClient.builder(), "http://localhost", "key", new PollProperties(Duration.ofSeconds(20)));
 	}
 
 	@Test
@@ -37,7 +40,7 @@ class StmPollerFeedHealthTest {
 		poller.markVehiclePositionsReceived(T0);
 		poller.markTripUpdatesReceived(T0);
 
-		assertThat(poller.getFeedHealth(T0.plus(StmPoller.FEED_STALE_AFTER))).isEqualTo(FeedHealth.HEALTHY);
+		assertThat(poller.getFeedHealth(T0.plus(poller.feedStaleAfter()))).isEqualTo(FeedHealth.HEALTHY);
 	}
 
 	@Test
@@ -45,7 +48,7 @@ class StmPollerFeedHealthTest {
 		poller.markVehiclePositionsReceived(T0);
 		poller.markTripUpdatesReceived(T0);
 
-		assertThat(poller.getFeedHealth(T0.plus(StmPoller.FEED_STALE_AFTER).plusSeconds(1)))
+		assertThat(poller.getFeedHealth(T0.plus(poller.feedStaleAfter()).plusSeconds(1)))
 				.isEqualTo(FeedHealth.DOWN);
 	}
 
@@ -76,5 +79,17 @@ class StmPollerFeedHealthTest {
 		poller.markTripUpdatesReceived(later);
 
 		assertThat(poller.getFeedHealth(later)).isEqualTo(FeedHealth.HEALTHY);
+	}
+
+	@Test
+	void staleLimit_isThreeMissedCyclesOfTheConfiguredInterval() {
+		StmPoller slower = new StmPoller(WebClient.builder(), "http://localhost", "key",
+				new PollProperties(Duration.ofSeconds(30)));
+		slower.markVehiclePositionsReceived(T0);
+		slower.markTripUpdatesReceived(T0);
+
+		assertThat(slower.feedStaleAfter()).isEqualTo(Duration.ofSeconds(90));
+		assertThat(slower.getFeedHealth(T0.plusSeconds(90))).isEqualTo(FeedHealth.HEALTHY);
+		assertThat(slower.getFeedHealth(T0.plusSeconds(91))).isEqualTo(FeedHealth.DOWN);
 	}
 }

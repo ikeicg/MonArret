@@ -17,6 +17,7 @@ import org.springframework.web.reactive.function.client.ExchangeFunction;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import com.monarret.backend.config.PollProperties;
 import com.google.transit.realtime.GtfsRealtime.FeedHeader;
 import com.google.transit.realtime.GtfsRealtime.FeedMessage;
 
@@ -39,7 +40,7 @@ class StmPollerFeedIndependenceTest {
 	}
 
 	private StmPoller newPoller(ExchangeFunction fake) {
-		poller = new StmPoller(WebClient.builder().exchangeFunction(fake), "http://stm.test", "key");
+		poller = new StmPoller(WebClient.builder().exchangeFunction(fake), "http://stm.test", "key", new PollProperties(Duration.ofSeconds(20)));
 		return poller;
 	}
 
