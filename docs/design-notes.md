@@ -11,6 +11,7 @@ A short overview of how MonArret works and the main choices behind it.
 
 - **Live state lives in memory.** Around 1,500 trips run at a time and each state is small. A state holds the trip's route geometry, its stop schedule, a two-minute window of positions and the latest facts from the feed. A bus that leaves the feed is dropped within five minutes.
 - **Each health item is a pure function of a snapshot.** The checks do not touch the store, the clock or the database, which keeps them small and easy to test.
+- **Searches are cache-first.** The picker's route, direction and departure lookups are answered from Redis for an hour and fall back to PostgreSQL on a miss. The day's departures are cached per route and direction, and the next-hour filter is applied on each request.
 - **Responses are cached per feed version.** A new feed message produces a new cache key, so an old answer is never served for new data. Responses carry an `ETag`, so a page that has not changed answers "not modified".
 - **Polling respects STM's quota.** STM allows 10,000 requests a day per user. Two feeds every 20 seconds use 8,640. The interval is a setting, and the application refuses to start below 20 seconds.
 - **Each feed has its own loop.** One failing feed cannot hold up the other, and a loop that errors restarts itself. If processing falls behind, only the newest message is kept.

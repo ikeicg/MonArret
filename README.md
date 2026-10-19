@@ -22,25 +22,33 @@ flowchart LR
     nginx -->|/search/ and /trips/| api[Spring Boot API]
 
     subgraph backend[Backend]
+        api -->|trip health| cache[(Caffeine cache<br/>keyed on feed version)]
+        cache --> assembler[TripHealthAssembler<br/>pure checks]
+        assembler --> store[(ActiveTripStateStore<br/>live trips, in memory)]
+
+        api -->|search| redis[(Redis<br/>search results)]
+        redis -->|on a miss| pg[(PostgreSQL + PostGIS<br/>static schedule)]
+
         poller[StmPoller<br/>two feeds, one loop each] --> engine[LiveStateEngine]
-        engine --> store[(ActiveTripStateStore<br/>live trips, in memory)]
+        engine -->|ingests| store
         engine --> factory[ActiveTripStateFactory]
-        api --> assembler[TripHealthAssembler<br/>pure checks] --> store
-        api --> cache[(Caffeine cache<br/>keyed on feed version)]
-        api --> redis[(Redis<br/>search results)]
-        loader[GtfsStaticLoader<br/>daily, zero-downtime swap] --> pg[(PostgreSQL + PostGIS<br/>static schedule)]
-        factory --> pg
+        factory -->|builds trips| pg
+
+        loader[GtfsStaticLoader<br/>daily, zero-downtime swap] --> pg
+        loader -.->|clears after a reload| redis
     end
 
     stm[STM GTFS-realtime API] --> poller
     zip[STM static GTFS zip] --> loader
 ```
 
-The static schedule is loaded into PostgreSQL once a day and swapped in without downtime. The live feeds are polled every 20 seconds into an in-memory store with one state per running trip, and each request for a page reads that store.
+The static schedule is loaded into PostgreSQL once a day and swapped in without downtime. The live feeds are polled every 20 seconds into an in-memory store with one state per running trip, and each request for a page reads that store. The searches behind the picker are answered from a Redis cache and fall back to PostgreSQL.
 
 ## Built with
 
-Java 21, Spring Boot 4, PostgreSQL with PostGIS, Redis · Angular 22 · Docker Compose
+- **Backend:** Java 21, Spring Boot 4 (MVC API, Reactor for the feed pipeline), PostgreSQL with PostGIS, Redis, Caffeine
+- **Frontend:** Angular 22, Transloco (English and French)
+- **Delivery:** nginx, Docker Compose
 
 ## Data
 
