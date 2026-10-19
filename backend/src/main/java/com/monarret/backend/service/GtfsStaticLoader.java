@@ -1034,7 +1034,7 @@ public class GtfsStaticLoader implements CommandLineRunner {
     }
     
     // Cached search results come from the old schedule. A Redis failure must not fail a completed swap.
-    private void clearSearchCaches() {
+    void clearSearchCaches() {
         for (String name : SEARCH_CACHES) {
             try {
                 Cache cache = redisCacheManager.getCache(name);
