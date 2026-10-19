@@ -4,6 +4,12 @@ A trip health page for STM bus riders in Montréal. Pick a route and a direction
 
 It combines what STM's real-time feed states directly with what the system works out by checking live positions against the static schedule and the route geometry. It shows facts, not scores, and it only speaks up when something matters. There is no map. The interface is in English and French.
 
+## Why MonArret
+
+Transit apps are built around maps, routing and trip planning across many agencies, and they do those things very well. A rider who is already at a stop with a specific bus in mind is asking something narrower: *is this trip okay?* Answering it usually means watching a moving dot on a map, or reading an arrival time with no explanation, and working out the rest alone.
+
+MonArret takes that one question, and the rider's trip at their stop as its unit, and answers it in plain sentences: the bus is moving, it has been stopped for 5 minutes, it is running 6 minutes late, it skips your stop, it is not following its scheduled route. **It describes instead of drawing.** It is deliberately narrow: one question and, for now, one agency (STM buses in Montréal). The approach applies to any agency that publishes GTFS and GTFS-realtime data, though each agency's quirks need handling, as STM's did.
+
 ## What the page shows
 
 - **Trip status:** live (with the age of the position), cancelled, not tracked yet, signal lost, trip finished, or live data unavailable
