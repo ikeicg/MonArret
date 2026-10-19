@@ -10,6 +10,16 @@ Transit apps are built around maps, routing and trip planning across many agenci
 
 MonArret takes that one question, and the rider's trip at their stop as its unit, and answers it in plain sentences: the bus is moving, it has been stopped for 5 minutes, it is running 6 minutes late, it skips your stop, it is not following its scheduled route. **It describes instead of drawing.** It is deliberately narrow: one question and, for now, one agency (STM buses in Montréal). The approach applies to any agency that publishes GTFS and GTFS-realtime data, though each agency's quirks need handling, as STM's did.
 
+## Screenshots
+
+Picking a route, a direction, then a stop and a departure time:
+
+![Picker: route 36 Monk, direction Ouest, stop and departure times](docs/screenshots/picker.png)
+
+The Trip Health page for the picked trip, refreshing about every 20 seconds:
+
+![Trip Health page for a live trip, 3 minutes late, 10 stops away](docs/screenshots/trip-health.png)
+
 ## What the page shows
 
 - **Trip status:** live (with the age of the position), cancelled, not tracked yet, signal lost, trip finished, or live data unavailable
@@ -61,7 +71,3 @@ The static schedule is loaded into PostgreSQL once a day and swapped in without 
 Transit data: [Société de transport de Montréal (STM)](https://www.stm.info/en/about/developers), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 MonArret is an independent project. It is not affiliated with or endorsed by the STM. Data is provided as is, with no guarantee of accuracy.
-
-## License
-
-All rights reserved. The source is published so that it can be viewed; copying, modification and redistribution are not permitted without permission. See [LICENSE](LICENSE).
