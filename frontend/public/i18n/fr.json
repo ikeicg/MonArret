@@ -77,7 +77,8 @@
     "MOVEMENT_UNKNOWN": "Pas assez de données de position pour savoir si l'autobus bouge",
     "STOP_AWAY_one": "arrêt à parcourir",
     "STOP_AWAY_other": "arrêts à parcourir",
-    "HEADING_TO": "En direction de {{name}}"
+    "HEADING_TO": "En direction de {{name}}",
+    "STOPPED_FOR": "Immobile depuis {{minutes}} min"
   },
   "timing": {
     "title": "Horaire",

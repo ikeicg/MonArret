@@ -112,4 +112,60 @@ class ActiveTripStateTest {
 		assertThat(a).isEqualTo(a);
 	}
 
+	// --- where the bus has been sitting ---
+
+	@Test
+	void aBusSittingStill_keepsItsStationaryClockAtTheFirstPing_evenAfterThePingWindowMovesOn() {
+		for (int s = 0; s <= 300; s += 20) {
+			state.addGpsPing(100, 200, T0.plusSeconds(s), null, null);
+		}
+
+		assertThat(state.toSnapshot().stationarySince()).isEqualTo(T0);
+		assertThat(state.getRecentPings().size()).isLessThan(16);
+	}
+
+	@Test
+	void gpsWobbleInsideTheRadius_doesNotRestartTheClock() {
+		state.addGpsPing(100, 200, T0, null, null);
+		state.addGpsPing(108, 205, T0.plusSeconds(20), null, null);
+		state.addGpsPing(95, 193, T0.plusSeconds(40), null, null);
+
+		assertThat(state.toSnapshot().stationarySince()).isEqualTo(T0);
+	}
+
+	@Test
+	void movingBeyondTheRadius_restartsTheClockAtTheNewSpot() {
+		state.addGpsPing(0, 0, T0, null, null);
+		state.addGpsPing(0, 0, T0.plusSeconds(60), null, null);
+		state.addGpsPing(100, 0, T0.plusSeconds(80), null, null);
+
+		assertThat(state.toSnapshot().stationarySince()).isEqualTo(T0.plusSeconds(80));
+	}
+
+	@Test
+	void aBusCreepingInSmallSteps_isMeasuredFromWhereItFirstStopped_notFromEachNeighbouringPing() {
+		// 6 m every 20 s never exceeds the radius from the first ping for three pings, then it does
+		state.addGpsPing(0, 0, T0, null, null);
+		state.addGpsPing(6, 0, T0.plusSeconds(20), null, null);
+		state.addGpsPing(12, 0, T0.plusSeconds(40), null, null);
+		state.addGpsPing(18, 0, T0.plusSeconds(60), null, null);
+
+		assertThat(state.toSnapshot().stationarySince()).isEqualTo(T0.plusSeconds(60));
+	}
+
+	@Test
+	void noPingYet_hasNoStationaryClock() {
+		assertThat(state.toSnapshot().stationarySince()).isNull();
+	}
+
+	@Test
+	void takingOverPositionsFromAnotherState_carriesTheStationaryClock() {
+		ActiveTripState old = new ActiveTripState();
+		old.addGpsPing(5, 5, T0, null, null);
+		old.addGpsPing(5, 5, T0.plusSeconds(200), null, null);
+
+		state.takeOverPositionsFrom(old);
+
+		assertThat(state.toSnapshot().stationarySince()).isEqualTo(T0);
+	}
 }

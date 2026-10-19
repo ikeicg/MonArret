@@ -20,7 +20,18 @@ public record TripSnapshot(
 		String currentStatus,
 		String occupancyStatus,
 		String scheduleRelationship,
-		boolean positionFrozen) {
+		boolean positionFrozen,
+		// When the bus arrived at the spot it is still within STATIONARY_RADIUS_METERS of; null before any ping
+		Instant stationarySince) {
+
+	public TripSnapshot(String tripId, String routeId, Integer directionId, String shapeId, LocalDate serviceDate,
+			Double routeLengthMeters, List<StopTimeContext> stopSchedule, List<GpsPing> recentPings,
+			Instant lastSeenInFeed, Integer currentStopSequence, String currentStopId, String currentStatus,
+			String occupancyStatus, String scheduleRelationship, boolean positionFrozen) {
+		this(tripId, routeId, directionId, shapeId, serviceDate, routeLengthMeters, stopSchedule, recentPings,
+				lastSeenInFeed, currentStopSequence, currentStopId, currentStatus, occupancyStatus,
+				scheduleRelationship, positionFrozen, null);
+	}
 
 	public GpsPing latestPing() {
 		return recentPings.isEmpty() ? null : recentPings.get(recentPings.size() - 1);

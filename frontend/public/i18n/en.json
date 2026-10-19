@@ -77,7 +77,8 @@
     "MOVEMENT_UNKNOWN": "Not enough position data to tell if the bus is moving",
     "STOP_AWAY_one": "stop away",
     "STOP_AWAY_other": "stops away",
-    "HEADING_TO": "Heading to {{name}}"
+    "HEADING_TO": "Heading to {{name}}",
+    "STOPPED_FOR": "Stopped for {{minutes}} min"
   },
   "timing": {
     "title": "Timing",

@@ -1,5 +1,8 @@
 package com.monarret.backend.runtime.health;
 
+import static com.monarret.backend.runtime.health.TripFixtures.ping;
+import static com.monarret.backend.runtime.health.TripFixtures.fiveStops;
+import static com.monarret.backend.runtime.health.TripFixtures.ROUTE_LENGTH;
 import static com.monarret.backend.runtime.health.TripFixtures.T0;
 import static com.monarret.backend.runtime.health.TripFixtures.fiveStopsWith;
 import static com.monarret.backend.runtime.health.TripFixtures.pingOffRoute;
@@ -138,5 +141,32 @@ class TripHealthAssemblerTest {
 		assertThat(health.timing()).isNull();
 		assertThat(health.crowding()).isNull();
 		assertThat(health.routeStatus()).isNull();
+	}
+
+	// --- time spent sitting still ---
+
+	@Test
+	void aBusSittingForMinutes_carriesTheTimeAndReadsAsStationary() {
+		Instant now = T0.plusSeconds(320);
+		TripSnapshot trip = new TripSnapshot("t1", "10", 0, "shape", java.time.LocalDate.of(2026, 10, 3), ROUTE_LENGTH,
+				fiveStops(), java.util.List.of(ping(T0.plusSeconds(310), 1500.0)), T0, 2, "stop-2", "STOPPED_AT", null,
+				"SCHEDULED", false, T0);
+
+		TripHealth health = TripHealthAssembler.assemble(trip, 4, now, FeedHealth.HEALTHY);
+
+		assertThat(health.progress().stationarySeconds()).isEqualTo(310);
+		assertThat(health.progress().movement()).isEqualTo(MovementStatus.STATIONARY);
+	}
+
+	@Test
+	void aBusThatJustStopped_carriesNoTime() {
+		Instant now = T0.plusSeconds(60);
+		TripSnapshot trip = new TripSnapshot("t1", "10", 0, "shape", java.time.LocalDate.of(2026, 10, 3), ROUTE_LENGTH,
+				fiveStops(), java.util.List.of(ping(T0.plusSeconds(50), 1500.0)), T0, 2, "stop-2", "IN_TRANSIT_TO", null,
+				"SCHEDULED", false, T0);
+
+		TripHealth health = TripHealthAssembler.assemble(trip, 4, now, FeedHealth.HEALTHY);
+
+		assertThat(health.progress().stationarySeconds()).isNull();
 	}
 }

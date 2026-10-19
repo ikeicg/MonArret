@@ -62,6 +62,7 @@ export interface BusProgress {
   stopsAway: number | null;
   nextStopName: string | null;
   movement: MovementStatus;
+  stationarySeconds: number | null;
 }
 
 export interface StopTiming {

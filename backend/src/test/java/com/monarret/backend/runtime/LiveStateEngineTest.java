@@ -555,6 +555,20 @@ class LiveStateEngineTest {
 		verify(tripRepository, times(2)).findById("trip-10");
 	}
 
+	@Test
+	void aBusSittingStill_hasItsStationaryClockStartAtTheFirstPing() {
+		stubStaticSchedule("sit-1");
+
+		for (int i = 0; i <= 15; i++) {
+			engine.handleVehiclePositions(feedWithVehicle(vehicleAt("sit-1", 45.525f, -73.575f)
+					.setTimestamp(EPOCH_T0 + i * 20L).build()));
+		}
+
+		TripSnapshot trip = store.snapshotTrip("sit-1").orElseThrow();
+		assertThat(trip.stationarySince()).isEqualTo(Instant.ofEpochSecond(EPOCH_T0));
+		assertThat(trip.latestPing().timestamp()).isEqualTo(Instant.ofEpochSecond(EPOCH_T0 + 300));
+	}
+
 	// --- route and stop geometry ---
 
 	@Test

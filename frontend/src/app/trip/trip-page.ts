@@ -5,7 +5,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
 import { interval, map, scan, startWith, switchMap } from 'rxjs';
 
 import { ApiService } from '../core/api.service';
-import { crowdingLevel, describeDelay, formatInstant, formatLocalDeparture } from '../core/format';
+import { crowdingLevel, describeDelay, formatInstant, formatLocalDeparture, minutesFromSeconds } from '../core/format';
 import { LanguageService } from '../core/language';
 import { HeadlineStatus, TripHealth } from '../core/models';
 import { POLL_INTERVAL_MS, online$, poll } from '../core/poll';
@@ -101,6 +101,7 @@ export class TripPage {
   });
 
   protected readonly delay = describeDelay;
+  protected readonly minutes = minutesFromSeconds;
   protected readonly crowding = crowdingLevel;
 
   protected time(iso: string): string {

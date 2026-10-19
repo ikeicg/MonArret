@@ -57,6 +57,11 @@ public class ActiveTripState {
     public static final double FROZEN_MOVEMENT_METERS = 2.0;
     private boolean positionFrozen;
 
+    // Where the bus has been sitting: the first ping from which every later one stayed within this radius. A bus
+    // whose GPS wobbles by a few meters is still parked, so this is anchored, not measured from ping to ping.
+    public static final double STATIONARY_RADIUS_METERS = 15.0;
+    private GpsPing stationaryAnchor;
+
     // The bus's own reports survive a change of service date, because they describe the bus, not the schedule.
     public void takeOverPositionsFrom(ActiveTripState other) {
         recentPings.clear();
@@ -66,6 +71,7 @@ public class ActiveTripState {
         currentStatus = other.currentStatus;
         occupancyStatus = other.occupancyStatus;
         positionFrozen = other.positionFrozen;
+        stationaryAnchor = other.stationaryAnchor;
     }
 
     // Returns false when the ping is not newer than the latest one (repeat or out of order) and is dropped.
@@ -75,6 +81,12 @@ public class ActiveTripState {
             return false;
         }
         recentPings.addLast(new GpsPing(x, y, timestamp, alongRoute, offRouteMeters));
+
+        GpsPing added = recentPings.peekLast();
+        if (stationaryAnchor == null
+                || Math.hypot(added.x() - stationaryAnchor.x(), added.y() - stationaryAnchor.y()) > STATIONARY_RADIUS_METERS) {
+            stationaryAnchor = added;
+        }
 
         Instant cutoff = timestamp.minus(PING_WINDOW);
         while (recentPings.peekFirst().timestamp().isBefore(cutoff)) {
@@ -107,7 +119,7 @@ public class ActiveTripState {
                 stopSchedule == null ? List.of() : List.copyOf(stopSchedule),
                 List.copyOf(recentPings),
                 lastSeenInFeed, currentStopSequence, currentStopId, currentStatus, occupancyStatus,
-                scheduleRelationship, positionFrozen);
+                scheduleRelationship, positionFrozen, stationaryAnchor == null ? null : stationaryAnchor.timestamp());
     }
 
     // Audit methods

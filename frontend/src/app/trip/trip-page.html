@@ -73,6 +73,9 @@
         <span class="pill">
           {{ (p.movement === 'UNKNOWN' ? 'progress.MOVEMENT_UNKNOWN' : 'progress.' + p.movement) | transloco }}
         </span>
+        @if (p.stationarySeconds) {
+          <p class="tile-text">{{ 'progress.STOPPED_FOR' | transloco: { minutes: minutes(p.stationarySeconds) } }}</p>
+        }
       } @else {
         <p class="muted">{{ 'progress.NONE' | transloco }}</p>
       }

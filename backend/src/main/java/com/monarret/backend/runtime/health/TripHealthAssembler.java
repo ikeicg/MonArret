@@ -19,6 +19,9 @@ public final class TripHealthAssembler {
 
 		boolean hasVehicle = trip.latestPing() != null;
 		BusProgress progress = hasVehicle ? BusProgressCheck.evaluate(trip, stopSequence) : null;
+		if (progress != null) {
+			progress = progress.withStationarySeconds(StationaryCheck.seconds(trip, now));
+		}
 		boolean passed = progress != null && progress.state() == ProgressState.PASSED;
 		StopTiming timing = passed ? null : TimingCheck.evaluate(trip, stopSequence, now);
 		Occupancy crowding = hasVehicle ? Occupancy.fromFeed(trip.occupancyStatus()) : null;

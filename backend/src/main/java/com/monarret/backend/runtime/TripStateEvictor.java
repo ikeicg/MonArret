@@ -17,12 +17,14 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class TripStateEvictor {
 
-	static final Duration MAX_AGE = Duration.ofMinutes(5);
+	// A state unseen for MAX_AGE is removed by the next sweep, so a bus that left the feed is gone within
+	// MAX_AGE plus the sweep interval: 5 minutes.
+	static final Duration MAX_AGE = Duration.ofMinutes(4);
 
 	private final ActiveTripStateStore store;
 	private final StmPoller poller;
 
-	@Scheduled(fixedDelay = 5 * 60 * 1000)
+	@Scheduled(fixedDelay = 60 * 1000)
 	public void sweep() {
 		sweep(Instant.now());
 	}
