@@ -979,6 +979,102 @@ class LiveStateEngineTest {
 		}
 	}
 
+	// --- after midnight the two feeds name the same running trip with dates a day apart ---
+	//
+	// A late-night trip scheduled at 25:55 belongs to the service day that began the day before. tripUpdates carry
+	// that service date; vehiclePositions carry the calendar date. They are one trip, not two.
+
+	@Nested
+	class ServiceDateAfterMidnight {
+
+		private static final String SERVICE_DAY = "20260921";
+		private static final String CALENDAR_DAY = "20260922";
+		// 25:55:16 and 25:56:40 of the service day: 01:55 and 01:56 on the 22nd, Montreal time
+		private static final int FIRST_STOP_SECONDS = 93316;
+		private static final int SECOND_STOP_SECONDS = 93400;
+		private final long minutePastFirstStop = Instant.parse("2026-09-22T05:56:00Z").getEpochSecond();
+
+		private FeedMessage updateForServiceDay(String tripId) {
+			return feedWithTripUpdate(TripUpdate.newBuilder()
+					.setTrip(TripDescriptor.newBuilder().setTripId(tripId).setStartDate(SERVICE_DAY)
+							.setScheduleRelationship(TripDescriptor.ScheduleRelationship.SCHEDULED)
+							.setRouteId("10").setDirectionId(0).build())
+					.addStopTimeUpdate(TripUpdate.StopTimeUpdate.newBuilder()
+							.setStopSequence(2)
+							.setArrival(TripUpdate.StopTimeEvent.newBuilder().setTime(minutePastFirstStop + 90).build())
+							.setScheduleRelationship(TripUpdate.StopTimeUpdate.ScheduleRelationship.SCHEDULED)
+							.build())
+					.build());
+		}
+
+		private FeedMessage positionDatedCalendarDay(String tripId, long timestamp) {
+			return feedWithVehicle(vehicleAt(tripId, 45.525f, -73.575f)
+					.setTrip(TripDescriptor.newBuilder().setTripId(tripId).setStartDate(CALENDAR_DAY).build())
+					.setTimestamp(timestamp)
+					.build());
+		}
+
+		@Test
+		void aPositionDatedTheNextDay_joinsTheTripRunningFromTheDayBefore() {
+			stubStaticScheduleWithTimes("late-1", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
+
+			engine.handleTripUpdates(updateForServiceDay("late-1"));
+			engine.handleVehiclePositions(positionDatedCalendarDay("late-1", minutePastFirstStop));
+
+			TripSnapshot trip = store.snapshotTrip("late-1").orElseThrow();
+			assertThat(trip.serviceDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 21));
+			assertThat(trip.recentPings()).hasSize(1);
+			assertThat(trip.stopSchedule().get(1).estimatedArrival())
+					.isEqualTo(Instant.ofEpochSecond(minutePastFirstStop + 90));
+		}
+
+		@Test
+		void feedsThatKeepDisagreeingOnTheDate_leaveOneStableState() {
+			stubStaticScheduleWithTimes("late-2", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
+
+			for (int cycle = 0; cycle < 3; cycle++) {
+				engine.handleTripUpdates(withHeaderTimestamp(updateForServiceDay("late-2"), 1000 + cycle * 20L));
+				engine.handleVehiclePositions(withHeaderTimestamp(
+						positionDatedCalendarDay("late-2", minutePastFirstStop + cycle * 20L), 1000 + cycle * 20L));
+			}
+
+			TripSnapshot trip = store.snapshotTrip("late-2").orElseThrow();
+			assertThat(trip.serviceDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 21));
+			assertThat(trip.recentPings()).hasSize(3);
+			assertThat(trip.stopSchedule().get(1).estimatedArrival()).isNotNull();
+		}
+
+		@Test
+		void aPositionThatArrivesFirst_isCorrectedByTheTripUpdate_andLaterPositionsKeepItsDate() {
+			stubStaticScheduleWithTimes("late-3", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
+
+			engine.handleVehiclePositions(positionDatedCalendarDay("late-3", minutePastFirstStop));
+			engine.handleTripUpdates(updateForServiceDay("late-3"));
+			engine.handleVehiclePositions(positionDatedCalendarDay("late-3", minutePastFirstStop + 20));
+
+			TripSnapshot trip = store.snapshotTrip("late-3").orElseThrow();
+			assertThat(trip.serviceDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 21));
+			assertThat(trip.recentPings()).hasSize(1);
+			assertThat(trip.stopSchedule().get(1).estimatedArrival()).isNotNull();
+		}
+
+		@Test
+		void aPositionOneDayLaterThanTheScheduleWindow_isAGenuinelyNewInstance() {
+			stubStaticScheduleWithTimes("late-4", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
+			engine.handleTripUpdates(updateForServiceDay("late-4"));
+
+			// the next day's run of the same trip: its own window is a day later than the first one
+			long nextDay = minutePastFirstStop + 24 * 3600;
+			engine.handleVehiclePositions(feedWithVehicle(vehicleAt("late-4", 45.525f, -73.575f)
+					.setTrip(TripDescriptor.newBuilder().setTripId("late-4").setStartDate("20260923").build())
+					.setTimestamp(nextDay).build()));
+
+			TripSnapshot trip = store.snapshotTrip("late-4").orElseThrow();
+			assertThat(trip.serviceDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 23));
+			assertThat(trip.recentPings()).hasSize(1);
+		}
+	}
+
 	private FeedMessage emptyFeed() {
 		return FeedMessage.newBuilder()
 				.setHeader(FeedHeader.newBuilder().setGtfsRealtimeVersion("2.0").build())
