@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
@@ -64,16 +65,44 @@ public class ActiveTripStateStore {
 	}
 
 	
+	// A position never decides the service date. It joins the trip held under its id, or creates one whose date the
+	// factory works out from the schedule. False when there is nothing to join and no date to create one from.
+	public boolean attachPosition(String tripId, LocalDate reportedDate, UnaryOperator<ActiveTripState> updateAction) {
+		AtomicBoolean attached = new AtomicBoolean(true);
+		store.compute(tripId, (id, currentState) -> {
+			ActiveTripState state = currentState;
+			if (state == null) {
+				if (reportedDate == null) {
+					attached.set(false);
+					return null;
+				}
+				state = atsFactory.createForPosition(id, reportedDate);
+			}
+			ActiveTripState updated = updateAction.apply(state);
+			if (updated != null) {
+				updated.feedTouch();
+			}
+			return updated;
+		});
+		return attached.get();
+	}
+
 	public void applyTripUpdate(String tripId, LocalDate serviceDate, boolean scheduled, String routeId,
 			Integer directionId, UnaryOperator<ActiveTripState> updateAction) {
 		store.compute(tripId, (id, currentState) -> {
 			if (!isSameRun(currentState, serviceDate)) {
-				currentState = scheduled
+				ActiveTripState fresh = scheduled
 						? atsFactory.create(id, serviceDate)
 						: atsFactory.createBare(id, routeId, directionId, serviceDate);
+				if (currentState != null && currentState.isServiceDateProvisional()) {
+					fresh.takeOverPositionsFrom(currentState);
+				}
+				currentState = fresh;
 			} else if (scheduled && currentState.getStopSchedule() == null) {
 				currentState = atsFactory.create(id, serviceDate);
 			}
+			// a trip update states the date, so whatever date the trip now holds is no longer a guess
+			currentState.setServiceDateProvisional(false);
 
 			ActiveTripState updated = updateAction.apply(currentState);
 			if (updated != null) {

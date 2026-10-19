@@ -32,35 +32,60 @@ public class ActiveTripStateFactory {
 	
 	
 	public ActiveTripState create(String tripId, LocalDate serviceDate) {
-		
-			ActiveTripState activeTrip = new ActiveTripState();
-			Trip baseTrip = tripRepository.findById(tripId).orElseThrow(() -> new TripNotFoundException(tripId));
-			
-			// Populate identifiers
-			activeTrip.setTripId(tripId);
-			activeTrip.setRouteId(baseTrip.getRouteId());
-			activeTrip.setDirectionId(baseTrip.getDirectionId());
-			activeTrip.setShapeId(baseTrip.getShapeId());
-			activeTrip.setServiceDate(serviceDate);
-
-			// Populate route
-			LineString route = generateRoute(baseTrip.getRoutePatternId());
-			
-			if(route == null) throw new IllegalStateException();
-			
-			activeTrip.setRoute(route);
-			activeTrip.setRouteLengthMeters(route.getLength());
-			
-			// Populate stopSchedule
-			List<StopTimeContext> schedule = generateSchedule(baseTrip.getStopTimes(), serviceDate, route);
-			
-			if(schedule.isEmpty()) throw new IllegalStateException();
-			
-			activeTrip.setStopSchedule(schedule);
-			
-			return activeTrip;
+		return build(load(tripId), serviceDate);
 	}
-	
+
+	// A position carries the calendar day its trip started on. For a trip whose first stop is at or after 24:00 that is
+	// the day after its service day, and the schedule says by how many days. A trip update later confirms the date or
+	// replaces it.
+	public ActiveTripState createForPosition(String tripId, LocalDate reportedDate) {
+		Trip trip = load(tripId);
+		ActiveTripState state = build(trip, reportedDate.minusDays(wholeDaysBeforeFirstStop(trip)));
+		state.setServiceDateProvisional(true);
+		return state;
+	}
+
+	private Trip load(String tripId) {
+		return tripRepository.findById(tripId).orElseThrow(() -> new TripNotFoundException(tripId));
+	}
+
+	private static long wholeDaysBeforeFirstStop(Trip trip) {
+		List<StopTime> stopTimes = trip.getStopTimes();
+		if (stopTimes == null || stopTimes.isEmpty()) return 0;
+		StopTime first = stopTimes.get(0);
+		Integer seconds = first.getDepartureTime() != null ? first.getDepartureTime() : first.getArrivalTime();
+		return seconds == null ? 0 : seconds / 86400;
+	}
+
+	private ActiveTripState build(Trip baseTrip, LocalDate serviceDate) {
+
+		ActiveTripState activeTrip = new ActiveTripState();
+
+		// Populate identifiers
+		activeTrip.setTripId(baseTrip.getTripId());
+		activeTrip.setRouteId(baseTrip.getRouteId());
+		activeTrip.setDirectionId(baseTrip.getDirectionId());
+		activeTrip.setShapeId(baseTrip.getShapeId());
+		activeTrip.setServiceDate(serviceDate);
+
+		// Populate route
+		LineString route = generateRoute(baseTrip.getRoutePatternId());
+
+		if (route == null) throw new IllegalStateException();
+
+		activeTrip.setRoute(route);
+		activeTrip.setRouteLengthMeters(route.getLength());
+
+		// Populate stopSchedule
+		List<StopTimeContext> schedule = generateSchedule(baseTrip.getStopTimes(), serviceDate, route);
+
+		if (schedule.isEmpty()) throw new IllegalStateException();
+
+		activeTrip.setStopSchedule(schedule);
+
+		return activeTrip;
+	}
+
 	private List<StopTimeContext> generateSchedule(List<StopTime> stopTimes, LocalDate serviceDate, LineString route){
 
 		List<StopTimeContext> schedule = new ArrayList<>();

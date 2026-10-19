@@ -27,6 +27,9 @@ public class ActiveTripState {
     private Integer directionId;
     private String shapeId;
     private LocalDate serviceDate;
+    // Set when a position created the trip, so the date was worked out from the schedule instead of being
+    // stated by a trip update. The first trip update confirms it or replaces it.
+    private boolean serviceDateProvisional;
 
     // Static and Real-time Stop Schedule Context
     private List<StopTimeContext> stopSchedule;
@@ -53,6 +56,17 @@ public class ActiveTripState {
     public static final float MOVING_SPEED_MPS = 0.5f;
     public static final double FROZEN_MOVEMENT_METERS = 2.0;
     private boolean positionFrozen;
+
+    // The bus's own reports survive a change of service date, because they describe the bus, not the schedule.
+    public void takeOverPositionsFrom(ActiveTripState other) {
+        recentPings.clear();
+        recentPings.addAll(other.recentPings);
+        currentStopSequence = other.currentStopSequence;
+        currentStopId = other.currentStopId;
+        currentStatus = other.currentStatus;
+        occupancyStatus = other.occupancyStatus;
+        positionFrozen = other.positionFrozen;
+    }
 
     // Returns false when the ping is not newer than the latest one (repeat or out of order) and is dropped.
     public boolean addGpsPing(double x, double y, Instant timestamp, Double alongRoute, Double offRouteMeters) {

@@ -1,7 +1,6 @@
 package com.monarret.backend.runtime;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -19,7 +18,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import com.monarret.backend.runtime.model.StopTimeContext;
-import com.monarret.backend.runtime.model.TripSnapshot;
 import com.monarret.backend.service.StmPoller;
 import com.google.transit.realtime.GtfsRealtime.FeedEntity;
 import com.google.transit.realtime.GtfsRealtime.FeedMessage;
@@ -43,9 +41,6 @@ public class LiveStateEngine {
 
 	private final ActiveTripStateStore tripStateStore;
 	private final GeometricOperationsService geoOpsService;
-	// How far outside its scheduled times a trip can still be running (late buses, early starts).
-	private static final Duration RUNNING_WINDOW_MARGIN = Duration.ofHours(2);
-
 	private final Clock montrealClock;
 	private final IngestMetrics tripUpdatesMetrics;
 	private final IngestMetrics vehiclePositionsMetrics;
@@ -295,11 +290,8 @@ public class LiveStateEngine {
 			return;
 		}
 
-		LocalDate serviceDate = parseServiceDate(vehicle.getTrip());
-		if (serviceDate == null) {
-			log.debug("Skipping vehicle position for {}: missing or invalid start_date", tripId);
-			return;
-		}
+		// Only used when no trip is held yet; a held trip keeps the date its trip update gave it.
+		LocalDate reportedDate = parseServiceDate(vehicle.getTrip());
 
 		Position position = vehicle.getPosition();
 		if (!isRealPlace(position.getLatitude(), position.getLongitude())) {
@@ -309,9 +301,8 @@ public class LiveStateEngine {
 		ProjCoordinate projected = geoOpsService.transformWgsToUtm(position.getLongitude(), position.getLatitude());
 
 		Instant pingTime = Instant.ofEpochSecond(vehicle.getTimestamp());
-		serviceDate = serviceDateOfRunningTrip(tripId, serviceDate, pingTime);
 
-		tripStateStore.updateTripState(tripId, serviceDate, state -> {
+		boolean attached = tripStateStore.attachPosition(tripId, reportedDate, state -> {
 
 			Double alongRoute = projectAlongRoute(state, vehicle, projected.x, projected.y);
 
@@ -339,30 +330,12 @@ public class LiveStateEngine {
 
 			return state;
 		});
+
+		if (!attached) {
+			log.debug("Skipping vehicle position for {}: no trip to join and no usable start_date", tripId);
+		}
 	}
 
-
-	// After midnight, vehiclePositions name the calendar date while tripUpdates name the service date, so a trip
-	// scheduled at 25:55 appears with dates a day apart. A position dated the day after the state we hold, and
-	// inside that trip's scheduled window, belongs to the same running trip; anything else is a new instance.
-	private LocalDate serviceDateOfRunningTrip(String tripId, LocalDate reported, Instant at) {
-		return tripStateStore.snapshotTrip(tripId)
-			.filter(trip -> trip.serviceDate() != null && trip.serviceDate().plusDays(1).equals(reported))
-			.filter(trip -> scheduleWindowContains(trip, at))
-			.map(TripSnapshot::serviceDate)
-			.orElse(reported);
-	}
-
-	private static boolean scheduleWindowContains(TripSnapshot trip, Instant at) {
-		List<StopTimeContext> schedule = trip.stopSchedule();
-		if (schedule == null || schedule.isEmpty()) return false;
-		StopTimeContext first = schedule.get(0);
-		StopTimeContext last = schedule.get(schedule.size() - 1);
-		Instant start = first.scheduledDeparture() != null ? first.scheduledDeparture() : first.scheduledArrival();
-		Instant end = last.scheduledArrival() != null ? last.scheduledArrival() : last.scheduledDeparture();
-		if (start == null || end == null) return false;
-		return !at.isBefore(start.minus(RUNNING_WINDOW_MARGIN)) && !at.isAfter(end.plus(RUNNING_WINDOW_MARGIN));
-	}
 
 	private static boolean isRealPlace(float latitude, float longitude) {
 		return Float.isFinite(latitude) && Float.isFinite(longitude)

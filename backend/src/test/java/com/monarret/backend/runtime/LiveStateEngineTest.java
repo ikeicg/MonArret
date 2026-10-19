@@ -979,13 +979,13 @@ class LiveStateEngineTest {
 		}
 	}
 
-	// --- after midnight the two feeds name the same running trip with dates a day apart ---
+	// --- service dates: only a trip update states one; a position joins the trip or gets its day from the schedule ---
 	//
-	// A late-night trip scheduled at 25:55 belongs to the service day that began the day before. tripUpdates carry
-	// that service date; vehiclePositions carry the calendar date. They are one trip, not two.
+	// A late-night trip scheduled at 25:55 belongs to the service day that began the day before. tripUpdates carry that
+	// service date; vehiclePositions carry the calendar day the trip started on. They are one trip, not two.
 
 	@Nested
-	class ServiceDateAfterMidnight {
+	class ServiceDates {
 
 		private static final String SERVICE_DAY = "20260921";
 		private static final String CALENDAR_DAY = "20260922";
@@ -994,9 +994,9 @@ class LiveStateEngineTest {
 		private static final int SECOND_STOP_SECONDS = 93400;
 		private final long minutePastFirstStop = Instant.parse("2026-09-22T05:56:00Z").getEpochSecond();
 
-		private FeedMessage updateForServiceDay(String tripId) {
+		private FeedMessage updateDated(String tripId, String startDate) {
 			return feedWithTripUpdate(TripUpdate.newBuilder()
-					.setTrip(TripDescriptor.newBuilder().setTripId(tripId).setStartDate(SERVICE_DAY)
+					.setTrip(TripDescriptor.newBuilder().setTripId(tripId).setStartDate(startDate)
 							.setScheduleRelationship(TripDescriptor.ScheduleRelationship.SCHEDULED)
 							.setRouteId("10").setDirectionId(0).build())
 					.addStopTimeUpdate(TripUpdate.StopTimeUpdate.newBuilder()
@@ -1007,24 +1007,27 @@ class LiveStateEngineTest {
 					.build());
 		}
 
-		private FeedMessage positionDatedCalendarDay(String tripId, long timestamp) {
+		private FeedMessage positionDated(String tripId, String startDate, long timestamp) {
 			return feedWithVehicle(vehicleAt(tripId, 45.525f, -73.575f)
-					.setTrip(TripDescriptor.newBuilder().setTripId(tripId).setStartDate(CALENDAR_DAY).build())
+					.setTrip(TripDescriptor.newBuilder().setTripId(tripId).setStartDate(startDate).build())
 					.setTimestamp(timestamp)
 					.build());
 		}
 
+		private TripSnapshot trip(String tripId) {
+			return store.snapshotTrip(tripId).orElseThrow();
+		}
+
 		@Test
-		void aPositionDatedTheNextDay_joinsTheTripRunningFromTheDayBefore() {
+		void aPositionDatedTheNextDay_joinsTheTripAUpdateCreatedForTheDayBefore() {
 			stubStaticScheduleWithTimes("late-1", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
 
-			engine.handleTripUpdates(updateForServiceDay("late-1"));
-			engine.handleVehiclePositions(positionDatedCalendarDay("late-1", minutePastFirstStop));
+			engine.handleTripUpdates(updateDated("late-1", SERVICE_DAY));
+			engine.handleVehiclePositions(positionDated("late-1", CALENDAR_DAY, minutePastFirstStop));
 
-			TripSnapshot trip = store.snapshotTrip("late-1").orElseThrow();
-			assertThat(trip.serviceDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 21));
-			assertThat(trip.recentPings()).hasSize(1);
-			assertThat(trip.stopSchedule().get(1).estimatedArrival())
+			assertThat(trip("late-1").serviceDate()).isEqualTo(LocalDate.of(2026, 9, 21));
+			assertThat(trip("late-1").recentPings()).hasSize(1);
+			assertThat(trip("late-1").stopSchedule().get(1).estimatedArrival())
 					.isEqualTo(Instant.ofEpochSecond(minutePastFirstStop + 90));
 		}
 
@@ -1033,45 +1036,107 @@ class LiveStateEngineTest {
 			stubStaticScheduleWithTimes("late-2", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
 
 			for (int cycle = 0; cycle < 3; cycle++) {
-				engine.handleTripUpdates(withHeaderTimestamp(updateForServiceDay("late-2"), 1000 + cycle * 20L));
+				engine.handleTripUpdates(withHeaderTimestamp(updateDated("late-2", SERVICE_DAY), 1000 + cycle * 20L));
 				engine.handleVehiclePositions(withHeaderTimestamp(
-						positionDatedCalendarDay("late-2", minutePastFirstStop + cycle * 20L), 1000 + cycle * 20L));
+						positionDated("late-2", CALENDAR_DAY, minutePastFirstStop + cycle * 20L), 1000 + cycle * 20L));
 			}
 
-			TripSnapshot trip = store.snapshotTrip("late-2").orElseThrow();
-			assertThat(trip.serviceDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 21));
-			assertThat(trip.recentPings()).hasSize(3);
-			assertThat(trip.stopSchedule().get(1).estimatedArrival()).isNotNull();
+			assertThat(trip("late-2").serviceDate()).isEqualTo(LocalDate.of(2026, 9, 21));
+			assertThat(trip("late-2").recentPings()).hasSize(3);
+			assertThat(trip("late-2").stopSchedule().get(1).estimatedArrival()).isNotNull();
 		}
 
 		@Test
-		void aPositionThatArrivesFirst_isCorrectedByTheTripUpdate_andLaterPositionsKeepItsDate() {
+		void aPositionThatCreatesTheTrip_getsTheServiceDayFromTheSchedule() {
 			stubStaticScheduleWithTimes("late-3", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
 
-			engine.handleVehiclePositions(positionDatedCalendarDay("late-3", minutePastFirstStop));
-			engine.handleTripUpdates(updateForServiceDay("late-3"));
-			engine.handleVehiclePositions(positionDatedCalendarDay("late-3", minutePastFirstStop + 20));
+			engine.handleVehiclePositions(positionDated("late-3", CALENDAR_DAY, minutePastFirstStop));
 
-			TripSnapshot trip = store.snapshotTrip("late-3").orElseThrow();
-			assertThat(trip.serviceDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 21));
-			assertThat(trip.recentPings()).hasSize(1);
-			assertThat(trip.stopSchedule().get(1).estimatedArrival()).isNotNull();
+			ActiveTripState state = store.fetchTripState("late-3").orElseThrow();
+			assertThat(state.getServiceDate()).isEqualTo(LocalDate.of(2026, 9, 21));
+			assertThat(state.getStopSchedule().get(0).scheduledArrival()).isEqualTo(Instant.parse("2026-09-22T05:55:16Z"));
+			assertThat(state.isServiceDateProvisional()).isTrue();
 		}
 
 		@Test
-		void aPositionOneDayLaterThanTheScheduleWindow_isAGenuinelyNewInstance() {
+		void theTripUpdateThatFollows_confirmsTheDateWithoutRebuildingTheTrip() {
 			stubStaticScheduleWithTimes("late-4", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
-			engine.handleTripUpdates(updateForServiceDay("late-4"));
+			engine.handleVehiclePositions(positionDated("late-4", CALENDAR_DAY, minutePastFirstStop));
+			ActiveTripState created = store.fetchTripState("late-4").orElseThrow();
 
-			// the next day's run of the same trip: its own window is a day later than the first one
-			long nextDay = minutePastFirstStop + 24 * 3600;
-			engine.handleVehiclePositions(feedWithVehicle(vehicleAt("late-4", 45.525f, -73.575f)
-					.setTrip(TripDescriptor.newBuilder().setTripId("late-4").setStartDate("20260923").build())
-					.setTimestamp(nextDay).build()));
+			engine.handleTripUpdates(updateDated("late-4", SERVICE_DAY));
+			engine.handleVehiclePositions(positionDated("late-4", CALENDAR_DAY, minutePastFirstStop + 20));
 
-			TripSnapshot trip = store.snapshotTrip("late-4").orElseThrow();
-			assertThat(trip.serviceDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 23));
-			assertThat(trip.recentPings()).hasSize(1);
+			ActiveTripState afterwards = store.fetchTripState("late-4").orElseThrow();
+			assertThat(afterwards).isSameAs(created);
+			assertThat(afterwards.isServiceDateProvisional()).isFalse();
+			assertThat(trip("late-4").recentPings()).hasSize(2);
+			assertThat(trip("late-4").stopSchedule().get(1).estimatedArrival()).isNotNull();
+		}
+
+		@Test
+		void aTripThatStartsBeforeMidnight_keepsTheDateOfThePosition() {
+			stubStaticScheduleWithTimes("day-1", 28800, 29000);
+
+			engine.handleVehiclePositions(positionDated("day-1", SERVICE_DAY, EPOCH_T0));
+
+			assertThat(trip("day-1").serviceDate()).isEqualTo(LocalDate.of(2026, 9, 21));
+		}
+
+		@Test
+		void aPositionNeverReplacesTheTripHeld() {
+			stubStaticScheduleWithTimes("late-5", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
+			engine.handleTripUpdates(updateDated("late-5", SERVICE_DAY));
+			ActiveTripState held = store.fetchTripState("late-5").orElseThrow();
+
+			engine.handleVehiclePositions(positionDated("late-5", "20260930", minutePastFirstStop));
+
+			assertThat(store.fetchTripState("late-5").orElseThrow()).isSameAs(held);
+			assertThat(held.getServiceDate()).isEqualTo(LocalDate.of(2026, 9, 21));
+			assertThat(trip("late-5").recentPings()).hasSize(1);
+			assertThat(trip("late-5").stopSchedule().get(1).estimatedArrival()).isNotNull();
+		}
+
+		@Test
+		void aTripUpdateWithAnotherDate_replacesAGuessedDate_andKeepsThePositionsAlreadyCollected() {
+			// a position names a date the schedule rule does not shift, and a trip update then says otherwise
+			stubStaticScheduleWithTimes("day-2", 28800, 29000);
+			engine.handleVehiclePositions(positionDated("day-2", "20260922", EPOCH_T0));
+			assertThat(trip("day-2").serviceDate()).isEqualTo(LocalDate.of(2026, 9, 22));
+
+			engine.handleTripUpdates(updateDated("day-2", SERVICE_DAY));
+
+			assertThat(trip("day-2").serviceDate()).isEqualTo(LocalDate.of(2026, 9, 21));
+			assertThat(trip("day-2").recentPings()).hasSize(1);
+			assertThat(store.fetchTripState("day-2").orElseThrow().isServiceDateProvisional()).isFalse();
+		}
+
+		@Test
+		void aTripUpdateWithANewDate_afterTheDateWasStated_startsAFreshRunWithoutTheOldPositions() {
+			stubStaticScheduleWithTimes("late-6", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
+			engine.handleTripUpdates(updateDated("late-6", SERVICE_DAY));
+			engine.handleVehiclePositions(positionDated("late-6", CALENDAR_DAY, minutePastFirstStop));
+			assertThat(trip("late-6").recentPings()).hasSize(1);
+
+			engine.handleTripUpdates(updateDated("late-6", "20260922"));
+
+			assertThat(trip("late-6").serviceDate()).isEqualTo(LocalDate.of(2026, 9, 22));
+			assertThat(trip("late-6").recentPings()).isEmpty();
+		}
+
+		@Test
+		void aPositionWithNoDate_cannotCreateATrip_butStillJoinsOneThatExists() {
+			stubStaticScheduleWithTimes("late-7", FIRST_STOP_SECONDS, SECOND_STOP_SECONDS);
+			FeedMessage noDate = feedWithVehicle(vehicleAt("late-7", 45.525f, -73.575f)
+					.setTrip(TripDescriptor.newBuilder().setTripId("late-7").build())
+					.setTimestamp(minutePastFirstStop).build());
+
+			engine.handleVehiclePositions(noDate);
+			assertThat(store.getActiveTripCount()).isZero();
+
+			engine.handleTripUpdates(updateDated("late-7", SERVICE_DAY));
+			engine.handleVehiclePositions(noDate);
+			assertThat(trip("late-7").recentPings()).hasSize(1);
 		}
 	}
 
