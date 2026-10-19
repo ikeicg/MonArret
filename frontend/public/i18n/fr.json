@@ -43,7 +43,8 @@
     "updating": "Mise à jour…",
     "paused": "Mises à jour suspendues",
     "finished": "Trajet terminé. Mises à jour arrêtées.",
-    "retryIn": "Actualisation impossible. Nouvel essai dans {{n}} s"
+    "retryIn": "Actualisation impossible. Nouvel essai dans {{n}} s",
+    "departsAt": "Départ {{time}}"
   },
   "headline": {
     "LIVE_DATA_UNAVAILABLE": "Les données en direct sont temporairement indisponibles",
@@ -82,8 +83,8 @@
   },
   "timing": {
     "title": "Horaire",
-    "scheduled": "Prévu",
-    "predicted": "Prévision de la STM",
+    "scheduled": "Départ à l'horaire",
+    "predicted": "Départ prévu (STM)",
     "onTime": "À l'heure",
     "late": "{{n}} min de retard",
     "early": "{{n}} min d'avance",

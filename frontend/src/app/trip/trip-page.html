@@ -9,7 +9,7 @@
           <span><span class="route-chip">{{ routeId }}</span>@if (routeName()) { <span> {{ routeName() }}</span> }</span>
         }
         @if (stopName()) {
-          <span>{{ stopName() }}@if (departsLabel()) { · {{ departsLabel() }} }</span>
+          <span>{{ stopName() }}@if (departsLabel()) { · {{ 'trip.departsAt' | transloco: { time: departsLabel() } }} }</span>
         }
       </div>
     </div>

@@ -43,7 +43,8 @@
     "updating": "Updating…",
     "paused": "Updates paused",
     "finished": "Trip finished. Updates stopped.",
-    "retryIn": "Could not refresh. Retrying in {{n}} s"
+    "retryIn": "Could not refresh. Retrying in {{n}} s",
+    "departsAt": "Departs {{time}}"
   },
   "headline": {
     "LIVE_DATA_UNAVAILABLE": "Live data is temporarily unavailable",
@@ -82,8 +83,8 @@
   },
   "timing": {
     "title": "Timing",
-    "scheduled": "Scheduled",
-    "predicted": "STM prediction",
+    "scheduled": "Scheduled departure",
+    "predicted": "Predicted departure (STM)",
     "onTime": "On time",
     "late": "{{n}} min late",
     "early": "{{n}} min early",

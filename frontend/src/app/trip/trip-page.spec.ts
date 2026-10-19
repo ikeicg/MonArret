@@ -33,7 +33,7 @@ function health(stationarySeconds: number | null): TripHealth {
 }
 
 describe('TripPage bus progress tile', () => {
-  async function render(payload: TripHealth): Promise<HTMLElement> {
+  async function render(payload: TripHealth, inputs: Record<string, string> = {}): Promise<HTMLElement> {
     await TestBed.configureTestingModule({
       imports: [TripPage],
       providers: [
@@ -46,6 +46,7 @@ describe('TripPage bus progress tile', () => {
     const fixture = TestBed.createComponent(TripPage);
     fixture.componentRef.setInput('tripId', '300234200');
     fixture.componentRef.setInput('stopSequence', '57');
+    for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
     fixture.detectChanges();
     await fixture.whenStable();
     TestBed.inject(HttpTestingController)
@@ -66,5 +67,27 @@ describe('TripPage bus progress tile', () => {
     const page = await render(health(null));
 
     expect(page.textContent).not.toContain('Stopped for');
+  });
+
+  it('says the times are departures', async () => {
+    const withTiming = {
+      ...health(null),
+      timing: {
+        scheduled: '2026-10-19T06:39:26Z',
+        predicted: '2026-10-19T06:41:00Z',
+        status: 'NORMAL',
+        differenceSeconds: 94,
+        estimate: false,
+      },
+    } as TripHealth;
+
+    const page = await render(withTiming, {
+      stopName: 'Saint-Jacques / du Couvent',
+      departs: '2026-10-19T02:39:26',
+    });
+
+    expect(page.textContent).toContain('Scheduled departure');
+    expect(page.textContent).toContain('Predicted departure (STM)');
+    expect(page.textContent).toContain('Departs');
   });
 });
