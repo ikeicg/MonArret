@@ -61,3 +61,7 @@ The static schedule is loaded into PostgreSQL once a day and swapped in without 
 Transit data: [Société de transport de Montréal (STM)](https://www.stm.info/en/about/developers), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 MonArret is an independent project. It is not affiliated with or endorsed by the STM. Data is provided as is, with no guarantee of accuracy.
+
+## License
+
+All rights reserved. The source is published so that it can be viewed; copying, modification and redistribution are not permitted without permission. See [LICENSE](LICENSE).

@@ -1,0 +1,20 @@
+Copyright (c) 2026 Chukwuemeka IKE. All rights reserved.
+
+This source code is published for viewing only.
+
+Apart from the right to view and fork the repository on GitHub that GitHub's Terms
+of Service grant to its users, no licence of any kind is granted. You may not copy,
+modify, distribute, sublicense, host, or otherwise use this software, or any part of
+it, in whole or in part, for any purpose, without the prior written permission of
+the copyright holder.
+
+The transit data this project reads is provided by the Societe de transport de
+Montreal (STM) under the Creative Commons Attribution 4.0 licence (CC BY 4.0) and
+remains subject to that licence and to the STM's terms of use. This notice does not
+apply to that data.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR ITS USE.
