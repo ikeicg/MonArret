@@ -29,6 +29,12 @@ export function initialLanguage(): Language {
   return navigator.language?.toLowerCase().startsWith('fr') ? 'fr' : 'en';
 }
 
+// The page declares the language it is showing from the start, not only after a button press. A French page that
+// still says lang="en" gets offered machine translation, which breaks the live updates.
+export function declarePageLanguage(): void {
+  document.documentElement.lang = initialLanguage();
+}
+
 @Injectable({ providedIn: 'root' })
 export class LanguageService {
   private readonly transloco = inject(TranslocoService);

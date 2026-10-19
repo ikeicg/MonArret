@@ -1,14 +1,15 @@
 import { provideHttpClient } from '@angular/common/http';
-import { ApplicationConfig, isDevMode, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { ApplicationConfig, isDevMode, provideAppInitializer, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideTransloco } from '@jsverse/transloco';
 
 import { routes } from './app.routes';
-import { LANGUAGES, TranslocoHttpLoader, initialLanguage } from './core/language';
+import { LANGUAGES, TranslocoHttpLoader, declarePageLanguage, initialLanguage } from './core/language';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+    provideAppInitializer(declarePageLanguage),
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(),
     provideTransloco({
